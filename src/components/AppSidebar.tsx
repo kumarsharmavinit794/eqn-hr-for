@@ -30,7 +30,7 @@ const hrModules = [
 
 const aiFeatures = [
   { label: "AI Chat", icon: MessageSquare, path: "/ai-chat" },
-  { label: "AI Interview", icon: Brain, path: "/ai/interview" },
+  { label: "AI Interview", icon: Video, path: "/ai/interview" },
   { label: "Resume ATS", icon: Brain, path: "/ai/ats" },
   { label: "AI Insights", icon: Sparkles, path: "/ai/insights" },
 ];
