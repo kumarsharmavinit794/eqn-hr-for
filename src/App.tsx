@@ -23,6 +23,7 @@ import CulturePage from "@/pages/CulturePage";
 import AIChatPage from "@/pages/AIChatPage";
 import AIATSPage from "@/pages/AIATSPage";
 import AIInsightsPage from "@/pages/AIInsightsPage";
+import AIInterviewPage from "@/pages/AIInterviewPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 
