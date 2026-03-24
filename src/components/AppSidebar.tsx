@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Users, UserSearch, Clock, DollarSign, BarChart3, MessageSquare,
   ChevronLeft, Sparkles, Brain, Briefcase, UserPlus, GraduationCap, Heart,
-  Shield, FileText, Monitor, PieChart, UserMinus, Globe
+  Shield, FileText, Monitor, PieChart, UserMinus, Globe, Video
 } from "lucide-react";
 
 const navItems = [
