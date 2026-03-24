@@ -57,6 +57,7 @@ const App = () => (
             <Route path="/ai-chat" element={<AIChatPage />} />
             <Route path="/ai/ats" element={<AIATSPage />} />
             <Route path="/ai/insights" element={<AIInsightsPage />} />
+            <Route path="/ai/interview" element={<AIInterviewPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
