@@ -23,6 +23,7 @@ import CulturePage from "@/pages/CulturePage";
 import AIChatPage from "@/pages/AIChatPage";
 import AIATSPage from "@/pages/AIATSPage";
 import AIInsightsPage from "@/pages/AIInsightsPage";
+import AIInterviewPage from "@/pages/AIInterviewPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/ai-chat" element={<AIChatPage />} />
             <Route path="/ai/ats" element={<AIATSPage />} />
             <Route path="/ai/insights" element={<AIInsightsPage />} />
+            <Route path="/ai/interview" element={<AIInterviewPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
