@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import axios from "axios";
 import { motion } from "framer-motion";
 import { ArrowLeft, KeyRound, Loader2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import api from "@/lib/api";
+import api, { isApiError } from "@/lib/api";
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams();
@@ -27,7 +26,7 @@ export default function ResetPasswordPage() {
       setPassword("");
       setConfirmPassword("");
     } catch (error) {
-      if (axios.isAxiosError(error)) {
+      if (isApiError(error)) {
         setMessage(error.response?.data?.message || "Could not reset password.");
       }
     } finally {

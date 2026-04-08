@@ -1,6 +1,218 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Brain, FileUp, Loader2, RefreshCw, Sparkles, Trophy, Users } from "lucide-react";
+import { analyzeResumeMock } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 
-export default function ResumeATS() {
+const maxSize = 5 * 1024 * 1024;
+const skillLibrary = ["React", "Node.js", "TypeScript", "JavaScript", "Python", "SQL", "AWS", "Docker", "Kubernetes", "REST", "GraphQL"];
+
+const readFileAsBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(new Error("File read failed"));
+    reader.readAsDataURL(file);
+  });
+
+const normalizeKeywords = (text) =>
+  text
+    .toLowerCase()
+    .split(/[^a-z0-9.+#]+/g)
+    .filter(Boolean);
+
+const scoreLabel = (score) => (score >= 85 ? "Strong Hire" : score >= 70 ? "Hire" : score >= 55 ? "Consider" : "Reject");
+const probabilityLabel = (score) => (score >= 75 ? "High chance" : score >= 50 ? "Moderate chance" : "Low chance");
+
+function deriveCandidateInsights(file, base64, result, jobDescription) {
+  const jdWords = normalizeKeywords(jobDescription);
+  const jdSkills = skillLibrary.filter((skill) => jdWords.includes(skill.toLowerCase().replace(/\s+/g, "")) || jdWords.includes(skill.toLowerCase()));
+  const detectedSkills = result.top_skills_detected?.length ? result.top_skills_detected : skillLibrary.filter(() => Math.random() > 0.58).slice(0, 5);
+  const matchedSkills = detectedSkills.filter((skill) => jdSkills.includes(skill));
+  const missingSkills = jdSkills.filter((skill) => !detectedSkills.includes(skill));
+  const matchScore = jdSkills.length === 0 ? Math.min(95, result.ats_score + 4) : Math.round((matchedSkills.length / jdSkills.length) * 100);
+  const keywordScore = result.keyword_density === "High" ? 88 : result.keyword_density === "Medium" ? 62 : 38;
+  const hiringScore = Math.round(result.ats_score * 0.45 + matchScore * 0.35 + keywordScore * 0.2);
+  const interviewProbability = Math.max(15, Math.min(96, Math.round(hiringScore * 0.9)));
+
+  const exp = Number(String(result.experience_years || "2").match(/\d+/)?.[0] || 2);
+  const baseLpa = 5 + exp * 1.5 + Math.floor(detectedSkills.length * 0.55);
+  const salaryLow = Math.max(4, Math.round(baseLpa));
+  const salaryHigh = Math.round(salaryLow + 3 + exp * 0.4);
+
+  const questionBank = {
+    React: ["Explain React hooks.", "How does reconciliation work in React?"],
+    "Node.js": ["Explain Node.js event loop.", "How does Node handle async operations?"],
+    TypeScript: ["Difference between type and interface?", "What are generics in TypeScript?"],
+    SQL: ["How do you optimize SQL joins?", "Difference between clustered and non-clustered index?"],
+    Python: ["What are decorators?", "How do generators work?"],
+  };
+
+  const interviewQuestions = detectedSkills.slice(0, 3).map((skill) => ({
+    skill,
+    questions: questionBank[skill] || [`Walk me through a project where you used ${skill}.`, `What are advanced best practices for ${skill}?`],
+  }));
+
+  const personality = [
+    hiringScore > 80 ? "Leadership potential" : "Growth mindset",
+    result.readability_score > 75 ? "Clear communicator" : "Detail oriented",
+    detectedSkills.includes("SQL") ? "Analytical thinker" : "Problem solver",
+    detectedSkills.includes("React") ? "Collaborative team player" : "Execution focused",
+  ];
+
+  return {
+    id: `${file.name}-${Date.now()}-${Math.random()}`,
+    name: file.name.replace(/\.[^/.]+$/, ""),
+    file,
+    base64,
+    fileType: file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    result,
+    keywordScore,
+    matchScore,
+    matchedSkills,
+    missingSkills,
+    hiringScore,
+    interviewProbability,
+    interviewQuestions,
+    personality,
+    salaryRange: `₹${salaryLow} LPA - ₹${salaryHigh} LPA`,
+    rankingScore: Math.round(hiringScore * 0.6 + matchScore * 0.4),
+  };
+}
+
+function ResumeATSModern() {
+  const [files, setFiles] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [activeCandidateId, setActiveCandidateId] = useState("");
+  const [jobDescription, setJobDescription] = useState("Senior Frontend Engineer with React, TypeScript, Node.js, SQL, and cloud deployment experience.");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [dragActive, setDragActive] = useState(false);
+  const inputRef = useRef(null);
+
+  const processFiles = async (inputFiles) => {
+    if (!inputFiles?.length) return;
+    setError("");
+    const nextFiles = Array.from(inputFiles);
+    const invalid = nextFiles.find((f) => {
+      const name = f.name.toLowerCase();
+      return (!name.endsWith(".pdf") && !name.endsWith(".doc") && !name.endsWith(".docx")) || f.size > maxSize;
+    });
+    if (invalid) return setError("Only PDF, DOC, DOCX under 5MB are supported.");
+    setFiles(nextFiles);
+    setCandidates([]);
+    setActiveCandidateId("");
+  };
+
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
+    setDragActive(false);
+    void processFiles(event.dataTransfer.files);
+  }, []);
+
+  const analyze = async () => {
+    if (!files.length) return setError("Please upload at least one resume.");
+    setLoading(true);
+    setError("");
+    try {
+      const analyzed = await Promise.all(
+        files.map(async (file) => deriveCandidateInsights(file, await readFileAsBase64(file), analyzeResumeMock(file.name), jobDescription))
+      );
+      setCandidates(analyzed);
+      setActiveCandidateId(analyzed[0]?.id || "");
+    } catch (analysisError) {
+      console.error(analysisError);
+      setError("Analysis failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearAll = () => {
+    setFiles([]);
+    setCandidates([]);
+    setError("");
+    setActiveCandidateId("");
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const rankedCandidates = useMemo(
+    () => [...candidates].sort((a, b) => b.rankingScore - a.rankingScore).map((candidate, index) => ({ ...candidate, rank: index + 1 })),
+    [candidates]
+  );
+  const activeCandidate = rankedCandidates.find((candidate) => candidate.id === activeCandidateId) || rankedCandidates[0];
+  const shortlisted = rankedCandidates.filter((candidate) => candidate.hiringScore >= 75).slice(0, 5);
+  const comparePair = rankedCandidates.slice(0, 2);
+
+  useEffect(() => {
+    if (!activeCandidateId && rankedCandidates.length) setActiveCandidateId(rankedCandidates[0].id);
+  }, [activeCandidateId, rankedCandidates]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950 sm:px-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">ATS Hiring Intelligence Dashboard</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Enterprise-style resume intelligence, ranking, shortlisting, and interview readiness insights.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={clearAll}><RefreshCw className="mr-2 h-4 w-4" />Analyze Another</Button>
+            <Button onClick={analyze} disabled={!files.length || loading}><Sparkles className="mr-2 h-4 w-4" />{loading ? "Analyzing..." : "Analyze Resume"}</Button>
+          </div>
+        </motion.div>
+
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+          <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Resume Upload Panel</CardTitle></CardHeader><CardContent>
+            <div onDrop={handleDrop} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={() => setDragActive(false)} className={`rounded-xl border-2 border-dashed p-8 text-center ${dragActive ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-slate-300 dark:border-slate-700"}`}>
+              <input ref={inputRef} type="file" accept=".pdf,.doc,.docx" multiple className="hidden" onChange={(e) => void processFiles(e.target.files)} />
+              <FileUp className="mx-auto mb-3 h-10 w-10 text-slate-400" />
+              <p className="text-sm text-slate-600 dark:text-slate-300">Upload one or more resumes to auto-rank candidates.</p>
+              <Button variant="outline" className="mt-4" onClick={() => inputRef.current?.click()}>Browse Files</Button>
+              {!!files.length && <p className="mt-2 text-xs text-emerald-600">{files.length} files ready</p>}
+            </div>
+            {error && <p className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
+          </CardContent></Card>
+          <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Job Description Input</CardTitle></CardHeader><CardContent><Label htmlFor="jd">Paste JD for match score and skill-gap analysis</Label><Textarea id="jd" rows={8} className="mt-2" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} /></CardContent></Card>
+        </div>
+
+        {loading && <Card className="dark:border-slate-700 dark:bg-slate-900"><CardContent className="flex items-center gap-2 p-5 text-sm"><Loader2 className="h-4 w-4 animate-spin" />Running AI parser, ranking candidates, and generating recommendations...</CardContent></Card>}
+
+        {!loading && activeCandidate && <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[
+            { label: "ATS Score", value: activeCandidate.result.ats_score, icon: Brain },
+            { label: "JD Match Score", value: activeCandidate.matchScore, icon: Sparkles },
+            { label: "Hiring Score", value: activeCandidate.hiringScore, icon: Trophy },
+            { label: "Interview Probability", value: activeCandidate.interviewProbability, icon: Users },
+          ].map((m) => <Card key={m.label} className="dark:border-slate-700 dark:bg-slate-900"><CardContent className="flex items-center justify-between p-5"><div><p className="text-xs text-slate-500">{m.label}</p><p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{m.value}%</p></div><m.icon className="h-5 w-5 text-slate-500" /></CardContent></Card>)}</div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">ATS Score Dashboard</CardTitle></CardHeader><CardContent className="space-y-3"><div className="mx-auto flex h-32 w-32 items-center justify-center rounded-full" style={{ background: `conic-gradient(rgb(37 99 235) ${activeCandidate.result.ats_score * 3.6}deg, rgb(226 232 240) 0deg)` }}><div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white dark:bg-slate-900"><p className="text-2xl font-bold">{activeCandidate.result.ats_score}</p><p className="text-xs text-slate-500">ATS</p></div></div>{[["Formatting", activeCandidate.result.formatting_score], ["Readability", activeCandidate.result.readability_score], ["Keyword", activeCandidate.keywordScore]].map(([l, v]) => <div key={String(l)}><div className="mb-1 flex justify-between text-xs"><span>{l}</span><span>{v}%</span></div><Progress value={Number(v)} /></div>)}</CardContent></Card>
+            <Card className="lg:col-span-2 dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">JD Match, Skill Gap, and Hiring Decision</CardTitle></CardHeader><CardContent className="space-y-3"><p className="rounded-lg border px-3 py-2 text-sm">Recommendation: <b>{scoreLabel(activeCandidate.hiringScore)}</b> | {probabilityLabel(activeCandidate.interviewProbability)}</p><div><p className="mb-1 text-xs font-semibold uppercase text-slate-500">Matching Keywords</p><div className="flex flex-wrap gap-2">{activeCandidate.matchedSkills.map((skill) => <Badge key={skill} className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{skill}</Badge>)}</div></div><div><p className="mb-1 text-xs font-semibold uppercase text-slate-500">Missing Keywords</p><div className="flex flex-wrap gap-2">{activeCandidate.missingSkills.length ? activeCandidate.missingSkills.map((skill) => <Badge key={skill} variant="outline" className="border-red-300 text-red-700 dark:border-red-900 dark:text-red-300">{skill}</Badge>) : <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">No critical gaps</Badge>}</div></div><p className="text-sm">Predicted Salary: <b>{activeCandidate.salaryRange}</b></p></CardContent></Card>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Strengths, Weaknesses, Improvements</CardTitle></CardHeader><CardContent className="space-y-3"><div><p className="text-xs font-semibold uppercase text-emerald-600">Strengths</p>{activeCandidate.result.strengths?.map((x) => <p key={x} className="text-sm">- {x}</p>)}</div><div><p className="text-xs font-semibold uppercase text-red-600">Weaknesses</p>{activeCandidate.result.weaknesses?.map((x) => <p key={x} className="text-sm">- {x}</p>)}</div><div>{activeCandidate.result.improvements?.map((x) => <p key={x.action} className="text-sm">[{x.priority}] {x.action}</p>)}</div></CardContent></Card>
+            <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Interview Questions and Personality Prediction</CardTitle></CardHeader><CardContent className="space-y-3">{activeCandidate.interviewQuestions.map((g) => <div key={g.skill}><p className="text-sm font-semibold">{g.skill}</p>{g.questions.map((q) => <p key={q} className="text-sm text-slate-600 dark:text-slate-300">- {q}</p>)}</div>)}<div className="flex flex-wrap gap-2 pt-1">{activeCandidate.personality.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}</div></CardContent></Card>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <Card className="xl:col-span-2 dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Candidate Ranking and Leaderboard</CardTitle></CardHeader><CardContent><div className="overflow-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b"><th className="py-2 pr-4">Rank</th><th className="py-2 pr-4">Candidate</th><th className="py-2 pr-4">ATS</th><th className="py-2 pr-4">Match</th><th className="py-2 pr-4">Hiring</th></tr></thead><tbody>{rankedCandidates.map((c) => <tr key={c.id} className="border-b border-slate-100 dark:border-slate-800"><td className="py-2 pr-4">{c.rank}</td><td className="py-2 pr-4">{c.name}</td><td className="py-2 pr-4">{c.result.ats_score}%</td><td className="py-2 pr-4">{c.matchScore}%</td><td className="py-2 pr-4">{c.hiringScore}%</td></tr>)}</tbody></table></div></CardContent></Card>
+            <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Auto Shortlisting</CardTitle></CardHeader><CardContent className="space-y-2">{shortlisted.length ? shortlisted.map((c) => <div key={c.id} className="rounded-lg border p-2"><p className="text-sm font-medium">{c.name}</p><p className="text-xs text-slate-500">{c.matchScore}% match | {c.hiringScore}% hiring</p></div>) : <p className="text-sm text-slate-500">No candidate met shortlist threshold.</p>}</CardContent></Card>
+          </div>
+          {comparePair.length === 2 && <Card className="dark:border-slate-700 dark:bg-slate-900"><CardHeader><CardTitle className="text-base">Candidate Comparison Panel</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{comparePair.map((c) => <div key={c.id} className="rounded-lg border p-3"><p className="font-semibold">{c.name}</p><p className="text-sm">ATS: {c.result.ats_score}%</p><p className="text-sm">Skills: {(c.matchedSkills.length ? c.matchedSkills : c.result.top_skills_detected || []).slice(0, 4).join(", ")}</p><p className="text-sm">Hiring: {c.hiringScore}%</p></div>)}</CardContent></Card>}
+        </>}
+      </div>
+    </div>
+  );
+}
+
+export default ResumeATSModern;
+
+function LegacyResumeATS() {
   const [file, setFile] = useState(null);
   const [fileBase64, setFileBase64] = useState(null);
   const [fileType, setFileType] = useState(null);
@@ -65,94 +277,7 @@ export default function ResumeATS() {
     setError("");
 
     try {
-      const isPdf = fileType === "application/pdf";
-      let messages;
-
-      if (isPdf) {
-        messages = [
-          {
-            role: "user",
-            content: [
-              {
-                type: "document",
-                source: { type: "base64", media_type: "application/pdf", data: fileBase64 }
-              },
-              {
-                type: "text",
-                text: `You are an expert ATS (Applicant Tracking System) resume analyzer.
-Analyze this resume thoroughly and return ONLY valid JSON (no markdown, no extra text).
-
-Return this exact structure:
-{
-  "ats_score": <number 0-100>,
-  "overall_verdict": "<one line summary>",
-  "sections_found": ["Contact Info", "Summary", "Experience", "Education", "Skills"],
-  "keyword_density": "<Low/Medium/High>",
-  "formatting_score": <number 0-100>,
-  "readability_score": <number 0-100>,
-  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-  "weaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"],
-  "improvements": [
-    {"priority": "High", "action": "<specific improvement>"},
-    {"priority": "Medium", "action": "<specific improvement>"},
-    {"priority": "Low", "action": "<specific improvement>"}
-  ],
-  "missing_sections": ["<section>"],
-  "top_skills_detected": ["<skill1>", "<skill2>", "<skill3>"],
-  "experience_years": "<estimated experience>"
-}`
-              }
-            ]
-          }
-        ];
-      } else {
-        // DOC/DOCX: binary files cannot be parsed directly
-        messages = [
-          {
-            role: "user",
-            content: `You are an ATS resume analyzer. The user uploaded a Word document named "${file.name}".
-Binary Word files cannot be parsed directly, so generate a helpful mock analysis explaining that PDF works best.
-
-Return ONLY valid JSON with this exact structure:
-{
-  "ats_score": 72,
-  "overall_verdict": "Good resume structure, but PDF format is recommended for best ATS compatibility.",
-  "sections_found": ["Contact Info", "Experience", "Education", "Skills"],
-  "keyword_density": "Medium",
-  "formatting_score": 75,
-  "readability_score": 80,
-  "strengths": ["Clear section headers present", "Work experience is listed", "Education details included"],
-  "weaknesses": ["DOC format may cause ATS parsing issues", "Keyword optimization needed", "Missing quantified achievements"],
-  "improvements": [
-    {"priority": "High", "action": "Convert resume to PDF for best ATS compatibility"},
-    {"priority": "High", "action": "Add measurable achievements (e.g., increased revenue by 30%)"},
-    {"priority": "Medium", "action": "Add a professional summary section at the top"}
-  ],
-  "missing_sections": ["Professional Summary", "Certifications"],
-  "top_skills_detected": ["Communication", "Team Leadership", "Problem Solving"],
-  "experience_years": "Unable to determine from DOC format — PDF recommended"
-}`
-          }
-        ];
-      }
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages
-        })
-      });
-
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-      const data = await response.json();
-      const rawText = data.content.map(i => i.text || "").join("");
-      const clean = rawText.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      setResult(parsed);
+      setResult(analyzeResumeMock(file.name));
     } catch (err) {
       setError("Analysis failed. Please try again.");
       console.error(err);
@@ -160,7 +285,6 @@ Return ONLY valid JSON with this exact structure:
       setLoading(false);
     }
   };
-
   const clearAll = () => {
     setFile(null); setFileBase64(null); setFileType(null);
     setResult(null); setError("");
@@ -429,3 +553,6 @@ Return ONLY valid JSON with this exact structure:
     </div>
   );
 }
+
+
+

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ChangeEvent } from "react";
+import { useState, useRef, type ChangeEvent } from "react";
 import { motion } from "framer-motion";
 import { UserCheck, FileText, Shield, CheckCircle2, Circle, Clock, Upload, MessageSquare, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import api from "@/lib/api";
 
 type Hire = {
   id: number;
@@ -44,10 +42,35 @@ const docStatusColors: Record<string, string> = {
   pending: "bg-warning/10 text-warning border-warning/20",
 };
 
+const mockHires: Hire[] = [
+  { id: 1, avatar: "PS", name: "Priya Sharma", role: "Frontend Engineer", joinDate: "15 Apr 2026", progress: 75 },
+  { id: 2, avatar: "RK", name: "Rahul Kumar", role: "Product Manager", joinDate: "18 Apr 2026", progress: 40 },
+  { id: 3, avatar: "AM", name: "Anjali Mehta", role: "UI/UX Designer", joinDate: "20 Apr 2026", progress: 60 },
+];
+
+const mockDocs: Doc[] = [
+  { id: 1, name: "Aadhaar Card", type: "Identity Proof", status: "verified" },
+  { id: 2, name: "PAN Card", type: "Tax Document", status: "uploaded" },
+  { id: 3, name: "Degree Certificate", type: "Education Proof", status: "pending" },
+  { id: 4, name: "Offer Letter Signed", type: "Employment", status: "verified" },
+  { id: 5, name: "Bank Details Form", type: "Payroll", status: "pending" },
+];
+
+function getBotReply(message: string): string {
+  const msg = message.toLowerCase();
+  if (msg.includes("leave")) return "Our leave policy includes 12 casual leaves, 12 sick leaves, and 15 earned leaves per year. Leaves can be applied via the HR portal.";
+  if (msg.includes("work hour") || msg.includes("timing")) return "Standard work hours are 9:30 AM to 6:30 PM, Monday to Friday. Flexible timing is available with manager approval.";
+  if (msg.includes("dress") || msg.includes("code")) return "We follow a smart-casual dress code on weekdays. Fridays are casual. Client-facing meetings require formal attire.";
+  if (msg.includes("remote") || msg.includes("wfh") || msg.includes("work from home")) return "Remote work is allowed up to 2 days per week after the probation period of 3 months. Full remote requires VP approval.";
+  if (msg.includes("salary") || msg.includes("pay") || msg.includes("payroll")) return "Salaries are credited on the last working day of each month. Payslips are available in the HR portal.";
+  if (msg.includes("probation")) return "The probation period is 3 months from the date of joining. Performance review happens at the end of probation.";
+  return `Thank you for your question about "${message}". Please reach out to HR at hr@company.com for detailed information on this topic.`;
+}
+
 export default function OnboardingPage() {
-  const [hires, setHires] = useState<Hire[]>([]);
-  const [docs, setDocs] = useState<Doc[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hires] = useState<Hire[]>(mockHires);
+  const [docs, setDocs] = useState<Doc[]>(mockDocs);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadContext, setUploadContext] = useState<{ name: string; type: string } | null>(null);
 
@@ -59,65 +82,15 @@ export default function OnboardingPage() {
   ]);
   const [input, setInput] = useState("");
 
-  useEffect(() => {
-    setLoadError(null);
-
-    api
-      .get("/onboarding")
-      .then((res) => {
-        console.log("API RESPONSE: /onboarding", res.data);
-        const next = res.data?.data;
-        setHires(Array.isArray(next) ? next : []);
-        if (!Array.isArray(next)) setLoadError("Invalid onboarding response format");
-      })
-      .catch((err) => {
-        console.error("Error fetching onboarding data:", err);
-        setHires([]);
-        setLoadError("Failed to load onboarding data");
-      });
-
-    api
-      .get("/documents")
-      .then((res) => {
-        console.log("API RESPONSE: /documents", res.data);
-        const next = res.data?.data;
-        setDocs(Array.isArray(next) ? next : []);
-        if (!Array.isArray(next)) setLoadError("Invalid documents response format");
-      })
-      .catch((err) => {
-        console.error("Error fetching documents data:", err);
-        setDocs([]);
-        setLoadError("Failed to load documents");
-      });
-  }, []);
-
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!input.trim()) return;
 
-    // user message add
     const newMessages = [...messages, { sender: "user", text: input }];
-    setMessages(newMessages);
-
-    try {
-      const res = await api.post("/onboarding/chatbot", {
-        message: input
-      });
-
-      setMessages([
-        ...newMessages,
-        { sender: "bot", text: res.data?.data?.reply || "No response available." }
-      ]);
-    } catch (err) {
-      console.error("Error sending message to chatbot:", err);
-      alert("Failed to get a response from the chatbot.");
-    }
+    setMessages([
+      ...newMessages,
+      { sender: "bot", text: getBotReply(input) }
+    ]);
     setInput("");
-  };
-
-  const refreshDocs = async () => {
-    const res = await api.get("/documents");
-    const next = res.data?.data;
-    setDocs(Array.isArray(next) ? next : []);
   };
 
   const openFilePicker = (context?: { name: string; type: string }) => {
@@ -125,43 +98,47 @@ export default function OnboardingPage() {
     fileInputRef.current?.click();
   };
 
-  const handleFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const form = new FormData();
-    form.append("file", file);
-    form.append("name", uploadContext?.name || file.name);
-    form.append("type", uploadContext?.type || "");
-
-    try {
-      const res = await api.post("/onboarding/documents/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      console.log("API RESPONSE: /onboarding/documents/upload", res.data);
-      alert("Document Uploaded ✅");
-      await refreshDocs();
-    } catch (err) {
-      console.error("Error uploading document:", err);
-      alert("Document Upload Failed ❌");
-    } finally {
-      event.target.value = "";
-      setUploadContext(null);
+    if (uploadContext?.name) {
+      setDocs((prev) =>
+        prev.map((d) =>
+          d.name === uploadContext.name ? { ...d, status: "uploaded" } : d
+        )
+      );
+    } else {
+      const nextId = docs.length > 0 ? Math.max(...docs.map((doc) => doc.id)) + 1 : 1;
+      setDocs((prev) => [
+        {
+          id: nextId,
+          name: file.name,
+          type: "General Document",
+          status: "uploaded",
+        },
+        ...prev,
+      ]);
     }
+
+    setUploadSuccess("Document uploaded successfully ✅");
+    setTimeout(() => setUploadSuccess(null), 3000);
+    event.target.value = "";
+    setUploadContext(null);
   };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {uploadSuccess && (
+        <div className="fixed top-4 right-4 z-[9999] flex items-center gap-3 rounded-xl border border-success/30 bg-success/10 text-success px-4 py-3 text-sm font-medium shadow-xl backdrop-blur-sm">
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          <span>{uploadSuccess}</span>
+        </div>
+      )}
       <div>
         <h1 className="page-header">Employee Onboarding</h1>
         <p className="page-subheader">Streamlined onboarding with automated verification & checklists</p>
       </div>
-
-      {!Array.isArray(hires) || !Array.isArray(docs) ? (
-        <p className="text-sm text-destructive">Error loading onboarding data.</p>
-      ) : null}
-      {loadError ? <p className="text-sm text-destructive">{loadError}</p> : null}
-
       {/* New Hires */}
       <div className="grid sm:grid-cols-3 gap-4">
         {Array.isArray(hires) && hires.map((h) => (
@@ -194,7 +171,7 @@ export default function OnboardingPage() {
 
         <TabsContent value="checklist" className="mt-4">
           <Card className="glass-card">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Onboarding Checklist — Priya Sharma</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Onboarding Checklist - Priya Sharma</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {checklist.map((item) => (

@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 import { Chrome, Github, Loader2, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { getDefaultRoute } from "@/lib/auth";
-import api from "@/lib/api";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+import api, { isApiError } from "@/lib/api";
 
 const validateEmail = (email) => /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/.test(email);
 const validatePassword = (password) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password);
@@ -241,7 +238,7 @@ export default function LoginPage() {
         }
       }
     } catch (error) {
-      const message = axios.isAxiosError(error)
+      const message = isApiError(error)
         ? error.response?.data?.message || error.response?.data?.detail || "Something went wrong"
         : "Something went wrong";
       toast.error(message);
@@ -341,7 +338,20 @@ export default function LoginPage() {
             </motion.div>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm" className="h-10 w-full gap-1.5 text-xs" onClick={() => { window.location.href = `${API_BASE_URL}/api/auth/google`; }}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 w-full gap-1.5 text-xs"
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    token: "mock-oauth-token",
+                    name: "Demo Employee",
+                    email: "employee@nexahr.com",
+                    role: "employee",
+                  });
+                  window.location.href = `/oauth-success?${params.toString()}`;
+                }}
+              >
                 <Chrome className="h-3.5 w-3.5" /> Google
               </Button>
               <Button variant="outline" size="sm" className="h-10 w-full gap-1.5 text-xs" disabled>

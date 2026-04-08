@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Briefcase, TrendingUp, Users, DollarSign,
@@ -24,88 +24,403 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from "recharts";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+type DepartmentConfig = {
+  overviewFocus: string;
+  responsibilities: string[];
+  requirements: string[];
+  benefits: string[];
+};
+
 interface Requirement {
   id: number;
   job_title: string;
   department: string;
   positions: number;
   budget: string | null;
-  status: string;
+  status: "high" | "medium" | "low";
   created_at?: string;
 }
+
 interface PrefilledJob {
   title: string;
   department: string;
   description: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+type ForecastPoint = {
+  month: string;
+  current: number | null;
+  projected: number;
+};
+
+type BudgetPoint = {
+  dept: string;
+  salary: number;
+  hiring: number;
+};
+
+type OrgNode = {
+  name: string;
+  children?: OrgNode[];
+};
+
 const MOCK_REQUIREMENTS: Requirement[] = [
-  { id: 1, job_title: "Senior React Developer", department: "Engineering", positions: 3, budget: "$360K", status: "high"   },
-  { id: 2, job_title: "Product Designer",        department: "Design",      positions: 2, budget: "$200K", status: "medium" },
-  { id: 3, job_title: "Data Analyst",            department: "Marketing",   positions: 1, budget: "$90K",  status: "low"    },
-  { id: 4, job_title: "DevOps Engineer",         department: "Engineering", positions: 2, budget: "$240K", status: "high"   },
-  { id: 5, job_title: "Content Strategist",      department: "Marketing",   positions: 1, budget: "$80K",  status: "medium" },
+  {
+    id: 1,
+    job_title: "Senior Frontend Engineer",
+    department: "Engineering",
+    positions: 3,
+    budget: "$360K",
+    status: "high",
+    created_at: "2026-04-01T10:00:00.000Z",
+  },
+  {
+    id: 2,
+    job_title: "Product Designer",
+    department: "Design",
+    positions: 2,
+    budget: "$180K",
+    status: "medium",
+    created_at: "2026-04-02T10:00:00.000Z",
+  },
+  {
+    id: 3,
+    job_title: "Growth Marketing Manager",
+    department: "Marketing",
+    positions: 1,
+    budget: "$120K",
+    status: "medium",
+    created_at: "2026-04-03T10:00:00.000Z",
+  },
+  {
+    id: 4,
+    job_title: "People Operations Specialist",
+    department: "HR",
+    positions: 1,
+    budget: "$95K",
+    status: "low",
+    created_at: "2026-04-04T10:00:00.000Z",
+  },
 ];
-const MOCK_STATS    = { openPositions: 9, totalBudget: "$970K", headcountTarget: 142, avgTimeToFill: 34 };
-const MOCK_FORECAST = [
-  { month: "Jan", current: 110, projected: 112 },
-  { month: "Feb", current: 114, projected: 116 },
-  { month: "Mar", current: 118, projected: 121 },
-  { month: "Apr", current: 120, projected: 126 },
-  { month: "May", current: null, projected: 130 },
-  { month: "Jun", current: null, projected: 135 },
-  { month: "Jul", current: null, projected: 140 },
-  { month: "Aug", current: null, projected: 142 },
+
+const MOCK_STATS = {
+  openPositions: 7,
+  totalBudget: "$755K",
+  headcountTarget: 148,
+  avgTimeToFill: 32,
+};
+
+const MOCK_FORECAST: ForecastPoint[] = [
+  { month: "Jan", current: 118, projected: 120 },
+  { month: "Feb", current: 121, projected: 124 },
+  { month: "Mar", current: 125, projected: 128 },
+  { month: "Apr", current: 129, projected: 132 },
+  { month: "May", current: null, projected: 137 },
+  { month: "Jun", current: null, projected: 142 },
 ];
-const MOCK_BUDGET = [
-  { dept: "Eng",       salary: 520, hiring: 48 },
-  { dept: "Design",    salary: 180, hiring: 18 },
-  { dept: "Marketing", salary: 140, hiring: 12 },
-  { dept: "Sales",     salary: 200, hiring: 20 },
-  { dept: "HR",        salary: 90,  hiring: 8  },
+
+const MOCK_BUDGET: BudgetPoint[] = [
+  { dept: "Eng", salary: 420, hiring: 95 },
+  { dept: "Design", salary: 155, hiring: 35 },
+  { dept: "Mktg", salary: 130, hiring: 24 },
+  { dept: "HR", salary: 90, hiring: 12 },
+  { dept: "Sales", salary: 210, hiring: 46 },
 ];
-const MOCK_ORG = {
+
+const MOCK_ORG: OrgNode = {
   name: "CEO",
   children: [
-    { name: "CTO", children: [{ name: "Engineering" }, { name: "DevOps" }] },
-    { name: "CPO", children: [{ name: "Product" },     { name: "Design" }] },
-    { name: "CMO", children: [{ name: "Marketing" },   { name: "Sales" }] },
+    {
+      name: "CTO",
+      children: [{ name: "Engineering" }, { name: "Product" }],
+    },
+    {
+      name: "COO",
+      children: [{ name: "Operations" }, { name: "HR" }],
+    },
+    {
+      name: "CRO",
+      children: [{ name: "Sales" }, { name: "Marketing" }],
+    },
   ],
 };
-const priorityColors: Record<string, string> = {
-  high:   "bg-red-500/10 text-red-600 border-red-400/30",
-  medium: "bg-amber-500/10 text-amber-600 border-amber-400/30",
-  low:    "bg-emerald-500/10 text-emerald-600 border-emerald-400/30",
-};
-const DEPARTMENTS = ["Engineering","Design","Marketing","Sales","HR","Product","Operations"];
 
-// ─── Claude API ───────────────────────────────────────────────────────────────
+const DEPARTMENTS = [
+  "Engineering",
+  "Design",
+  "Marketing",
+  "Sales",
+  "HR",
+  "Product",
+  "Operations",
+];
+
+const priorityColors: Record<string, string> = {
+  high: "border-red-200 bg-red-50 text-red-700",
+  medium: "border-amber-200 bg-amber-50 text-amber-700",
+  low: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+const JD_DEPARTMENT_TEMPLATES: Record<string, DepartmentConfig> = {
+  Engineering: {
+    overviewFocus: "build scalable, reliable product experiences and collaborate closely with design, product, and QA partners",
+    responsibilities: [
+      "Design, build, test, and maintain production-ready features with strong code quality standards.",
+      "Collaborate with product and design stakeholders to translate requirements into clear technical execution plans.",
+      "Review pull requests, improve development workflows, and contribute to engineering best practices.",
+      "Monitor delivery risks, troubleshoot issues, and support continuous improvement across the development lifecycle.",
+    ],
+    requirements: [
+      "Strong hands-on experience building and shipping modern software products.",
+      "Ability to write clean, maintainable, and well-documented code.",
+      "Comfort working with collaborative planning, debugging, and code review workflows.",
+      "Strong communication skills and the ability to break down complex technical work clearly.",
+    ],
+    benefits: [
+      "Work on high-impact product initiatives with modern tooling.",
+      "Collaborative engineering culture with room for mentorship and growth.",
+    ],
+  },
+  Design: {
+    overviewFocus: "create intuitive, polished, user-centered experiences across product touchpoints",
+    responsibilities: [
+      "Own end-to-end design deliverables from discovery and wireframes through polished handoff assets.",
+      "Partner with product, engineering, and research stakeholders to shape thoughtful user experiences.",
+      "Improve consistency across components, visual systems, and interaction patterns.",
+      "Use feedback, data, and testing insights to refine workflows and increase usability.",
+    ],
+    requirements: [
+      "Strong portfolio demonstrating product thinking and interface craft.",
+      "Experience with design systems, user flows, and collaborative iteration.",
+      "Ability to present rationale clearly and incorporate feedback effectively.",
+      "Strong attention to detail across layout, hierarchy, and interaction design.",
+    ],
+    benefits: [
+      "Opportunity to shape the design language of visible product experiences.",
+      "Cross-functional partnership with product and engineering leaders.",
+    ],
+  },
+  Marketing: {
+    overviewFocus: "drive pipeline, brand visibility, and campaign performance through data-informed execution",
+    responsibilities: [
+      "Plan and execute campaigns aligned to growth, awareness, and engagement goals.",
+      "Work with content, design, and sales teams to develop clear messaging and launch plans.",
+      "Track performance metrics, identify opportunities, and improve channel efficiency over time.",
+      "Support reporting, experimentation, and go-to-market coordination across initiatives.",
+    ],
+    requirements: [
+      "Experience managing multi-channel marketing initiatives with clear business goals.",
+      "Strong written communication and stakeholder coordination skills.",
+      "Ability to translate performance data into actionable recommendations.",
+      "Comfort balancing planning, execution, and optimization in fast-moving teams.",
+    ],
+    benefits: [
+      "Ownership of growth-focused initiatives with measurable impact.",
+      "Exposure to brand, campaign, and performance strategy work.",
+    ],
+  },
+  Sales: {
+    overviewFocus: "build strong customer relationships and accelerate revenue growth through consultative execution",
+    responsibilities: [
+      "Manage the sales pipeline from outreach and qualification through closing and handoff.",
+      "Work with marketing and customer teams to improve lead quality and conversion performance.",
+      "Understand client needs and communicate value with clarity and credibility.",
+      "Maintain accurate reporting, forecasting, and follow-through across active opportunities.",
+    ],
+    requirements: [
+      "Strong consultative selling and relationship management skills.",
+      "Ability to manage pipeline activity and communicate performance clearly.",
+      "Confidence working with targets, stakeholder follow-ups, and structured sales processes.",
+      "Strong negotiation, presentation, and objection-handling ability.",
+    ],
+    benefits: [
+      "Clear visibility into growth outcomes and commercial impact.",
+      "High-ownership environment with support from cross-functional teams.",
+    ],
+  },
+  HR: {
+    overviewFocus: "strengthen employee experience, people operations, and organizational effectiveness",
+    responsibilities: [
+      "Support hiring, onboarding, employee lifecycle coordination, and core HR operations.",
+      "Partner with managers and employees to maintain consistent, people-first processes.",
+      "Improve documentation, compliance readiness, and internal communication workflows.",
+      "Track people metrics and identify opportunities to improve experience and execution quality.",
+    ],
+    requirements: [
+      "Strong understanding of employee lifecycle workflows and operational coordination.",
+      "Ability to manage confidential information with sound judgment and professionalism.",
+      "Strong communication, organization, and cross-functional partnership skills.",
+      "Comfort balancing policy consistency with a positive employee experience.",
+    ],
+    benefits: [
+      "Direct impact on hiring quality, employee experience, and team health.",
+      "Broad exposure across people operations, culture, and talent programs.",
+    ],
+  },
+  Product: {
+    overviewFocus: "turn business goals and user needs into clear priorities, plans, and shipped outcomes",
+    responsibilities: [
+      "Define priorities, clarify scope, and align stakeholders around product objectives.",
+      "Translate customer and business needs into actionable requirements and delivery plans.",
+      "Work closely with engineering and design partners throughout the product lifecycle.",
+      "Measure outcomes, surface tradeoffs, and improve roadmap decisions with data and feedback.",
+    ],
+    requirements: [
+      "Experience managing product discovery, prioritization, and cross-functional delivery.",
+      "Strong communication and stakeholder alignment skills.",
+      "Ability to structure ambiguous problems and make practical tradeoff decisions.",
+      "Comfort using data, user feedback, and strategic context to guide execution.",
+    ],
+    benefits: [
+      "Own meaningful roadmap decisions with visible business impact.",
+      "High-collaboration role across strategy, design, and engineering.",
+    ],
+  },
+  Operations: {
+    overviewFocus: "improve execution quality, process efficiency, and cross-functional coordination at scale",
+    responsibilities: [
+      "Maintain and improve internal workflows, documentation, and operational consistency.",
+      "Coordinate with multiple teams to remove blockers and keep programs moving smoothly.",
+      "Track metrics, identify process gaps, and recommend practical improvements.",
+      "Support reporting, planning, and day-to-day execution across business operations.",
+    ],
+    requirements: [
+      "Strong operational thinking with attention to detail and follow-through.",
+      "Ability to organize complex work across teams and stakeholders.",
+      "Comfort working with reporting, process improvement, and structured execution.",
+      "Strong written and verbal communication skills.",
+    ],
+    benefits: [
+      "Broad business exposure and visible impact on team efficiency.",
+      "Opportunity to shape operational systems as the organization grows.",
+    ],
+  },
+};
+
+const DEFAULT_DEPARTMENT_TEMPLATE: DepartmentConfig = {
+  overviewFocus: "deliver high-quality work, partner closely with stakeholders, and contribute to continuous team improvement",
+  responsibilities: [
+    "Own key deliverables and maintain strong execution quality across day-to-day responsibilities.",
+    "Collaborate with cross-functional teams to align priorities, timelines, and outcomes.",
+    "Identify process improvements and communicate risks or blockers early.",
+    "Contribute positively to team goals, planning, and knowledge sharing.",
+  ],
+  requirements: [
+    "Relevant experience in a similar role or transferable functional expertise.",
+    "Strong communication, problem-solving, and organizational skills.",
+    "Ability to manage priorities effectively in a collaborative environment.",
+    "Comfort working with modern tools, reporting, and structured workflows.",
+  ],
+  benefits: [
+    "Growth-oriented environment with meaningful ownership opportunities.",
+    "Supportive collaboration across teams and functions.",
+  ],
+};
+
+function normalizeDepartment(department: string) {
+  return department.trim().toLowerCase();
+}
+
+function toTitleCase(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function getDepartmentConfig(department: string) {
+  const normalized = normalizeDepartment(department);
+  const match = Object.entries(JD_DEPARTMENT_TEMPLATES).find(([key]) => normalizeDepartment(key) === normalized);
+  return match ? { label: match[0], config: match[1] } : { label: toTitleCase(department) || "General", config: DEFAULT_DEPARTMENT_TEMPLATE };
+}
+
+function parseExtraRequirements(extra: string) {
+  return extra
+    .split(/\n|,|;/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function buildJobDescription(title: string, department: string, extra = "") {
+  const cleanTitle = title.trim();
+  const cleanDepartment = department.trim();
+
+  if (!cleanTitle && !cleanDepartment) {
+    return {
+      description: "",
+      guidance: "Enter a job title and choose a department to generate a complete job description.",
+    };
+  }
+
+  if (!cleanTitle) {
+    return {
+      description: "",
+      guidance: "Add a job title to generate a structured job description.",
+    };
+  }
+
+  if (!cleanDepartment) {
+    return {
+      description: "",
+      guidance: "Select a department to generate responsibilities and requirements tailored to the role.",
+    };
+  }
+
+  const { label: departmentLabel, config } = getDepartmentConfig(cleanDepartment);
+  const extraRequirements = parseExtraRequirements(extra);
+  const benefits = [
+    ...config.benefits,
+    "Competitive compensation, learning support, and a collaborative team environment.",
+  ];
+
+  const requirements = [...config.requirements];
+  if (extraRequirements.length > 0) {
+    requirements.push(...extraRequirements.map((item) => `Preference for candidates with ${item.replace(/\.$/, "")}.`));
+  }
+
+  const roleTitle = toTitleCase(cleanTitle) || "Team Member";
+  const description = [
+    "Job Overview",
+    `${roleTitle} will join the ${departmentLabel} team to ${config.overviewFocus}. This role is expected to work cross-functionally, communicate clearly, and maintain a high standard of execution.`,
+    "",
+    "Responsibilities",
+    ...config.responsibilities.map((item) => `- ${item}`),
+    "",
+    "Requirements",
+    ...requirements.map((item) => `- ${item}`),
+    "",
+    "Benefits",
+    ...benefits.map((item) => `- ${item}`),
+  ].join("\n");
+
+  return {
+    description,
+    guidance: "",
+  };
+}
+
 async function generateJDWithClaude(title: string, department: string, extra = "") {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{
-        role: "user",
-        content: `Write a professional job description for a ${title} role in the ${department} department.
-${extra ? `Key requirements: ${extra}` : ""}
-Format: Overview, Responsibilities (5-6 bullets), Requirements (5-6 bullets), Nice-to-haves (3 bullets). Be concise but compelling.`,
-      }],
-    }),
-  });
-  const data = await res.json();
-  return (data.content?.[0]?.text ?? "") as string;
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const { description } = buildJobDescription(title, department, extra);
+  return description || "Job Overview\nThis role supports key team priorities and cross-functional delivery.\n\nResponsibilities\n- Contribute to team deliverables.\n- Communicate progress clearly.\n- Maintain quality and consistency.\n\nRequirements\n- Relevant experience for the role.\n- Strong collaboration and communication skills.\n\nBenefits\n- Growth-oriented team environment.\n- Competitive compensation and learning support.";
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function HiringPlanningPage() {
-  const [requirements, setRequirements] = useState<Requirement[]>(MOCK_REQUIREMENTS);
+  return (
+    <PageErrorBoundary>
+      <HiringPlanningPageContent />
+    </PageErrorBoundary>
+  );
+}
+
+function HiringPlanningPageContent() {
+  const [requirements, setRequirements] = useState<Requirement[]>(MOCK_REQUIREMENTS ?? []);
   const [connected,    setConnected]    = useState<string[]>([]);
   const [stats,        setStats]        = useState(MOCK_STATS);
 
@@ -128,6 +443,18 @@ export default function HiringPlanningPage() {
     setStats(s => ({ ...s, openPositions: s.openPositions + req.positions }));
   };
 
+  const safeRequirements = requirements ?? [];
+  const safeForecast = MOCK_FORECAST ?? [];
+  const safeBudget = MOCK_BUDGET ?? [];
+  const safeDepartments = DEPARTMENTS ?? [];
+  const safeOrg = MOCK_ORG ?? { name: "Organization", children: [] };
+  const safeStats = {
+    openPositions: stats?.openPositions ?? 0,
+    totalBudget: stats?.totalBudget ?? "$0",
+    headcountTarget: stats?.headcountTarget ?? 0,
+    avgTimeToFill: stats?.avgTimeToFill ?? 0,
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -142,22 +469,23 @@ export default function HiringPlanningPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Strategic workforce planning with real-time data</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <JDGeneratorDialog onUseJD={handleUseJD} />
+          <JDGeneratorDialog onUseJD={handleUseJD} departments={safeDepartments} />
           <JobCreateDialog
             open={jobCreateOpen}
             onOpenChange={(v) => { setJobCreateOpen(v); if (!v) setPrefilled(null); }}
             prefilled={prefilled}
+            departments={safeDepartments}
           />
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: "Open Positions",   value: stats.openPositions,       icon: Briefcase,  sub: "from requirements"   },
-          { label: "Total Budget",     value: stats.totalBudget,         icon: DollarSign, sub: "across departments"  },
-          { label: "Headcount Target", value: stats.headcountTarget,     icon: Users,      sub: "projected workforce" },
-          { label: "Avg Time to Fill", value: `${stats.avgTimeToFill}d`, icon: TrendingUp, sub: "days per position"   },
+        {[ 
+          { label: "Open Positions",   value: safeStats.openPositions,       icon: Briefcase,  sub: "from requirements"   },
+          { label: "Total Budget",     value: safeStats.totalBudget,         icon: DollarSign, sub: "across departments"  },
+          { label: "Headcount Target", value: safeStats.headcountTarget,     icon: Users,      sub: "projected workforce" },
+          { label: "Avg Time to Fill", value: `${safeStats.avgTimeToFill}d`, icon: TrendingUp, sub: "days per position"   },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
             <Card>
@@ -180,7 +508,7 @@ export default function HiringPlanningPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Manpower Forecast</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={MOCK_FORECAST}>
+              <LineChart data={safeForecast}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} domain={[100, 150]} />
@@ -196,7 +524,7 @@ export default function HiringPlanningPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Budget Breakdown ($K)</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={MOCK_BUDGET}>
+              <BarChart data={safeBudget}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="dept" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
@@ -221,7 +549,7 @@ export default function HiringPlanningPage() {
         <CardContent>
           <div className="space-y-2.5">
             <AnimatePresence initial={false}>
-              {requirements.map((r) => (
+              {safeRequirements.map((r) => (
                 <motion.div
                   key={r.id}
                   initial={{ opacity: 0, x: -12 }}
@@ -236,8 +564,8 @@ export default function HiringPlanningPage() {
                       {r.budget ? ` · Budget: ${r.budget}` : ""}
                     </p>
                   </div>
-                  <Badge variant="outline" className={`text-xs shrink-0 capitalize ${priorityColors[r.status] ?? "bg-muted/30"}`}>
-                    {r.status}
+                  <Badge variant="outline" className={`text-xs shrink-0 capitalize ${priorityColors[r?.status] ?? "border-border bg-muted/30 text-muted-foreground"}`}>
+                    {r?.status ?? "unknown"}
                   </Badge>
                 </motion.div>
               ))}
@@ -255,7 +583,7 @@ export default function HiringPlanningPage() {
         </CardHeader>
         <CardContent>
           <div className="flex justify-start overflow-x-auto pb-2 pt-2 sm:justify-center">
-            <OrgNodeComponent node={MOCK_ORG} />
+            <OrgNodeComponent node={safeOrg} />
           </div>
         </CardContent>
       </Card>
@@ -298,13 +626,13 @@ function OrgNodeComponent({ node, depth = 0 }: { node: any; depth?: number }) {
   return (
     <div className="flex flex-col items-center">
       <div className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${colors[Math.min(depth, 2)]}`}>
-        {node.name}
+        {node?.name ?? "Unknown"}
       </div>
-      {node.children?.length > 0 && (
+      {(node?.children?.length ?? 0) > 0 && (
         <>
           <div className="w-px h-4 bg-border" />
           <div className="flex gap-6">
-            {node.children.map((c: any) => (
+            {(node?.children ?? []).map((c: any) => (
               <div key={c.name} className="flex flex-col items-center">
                 <div className="w-px h-4 bg-border" />
                 <OrgNodeComponent node={c} depth={depth + 1} />
@@ -320,44 +648,77 @@ function OrgNodeComponent({ node, depth = 0 }: { node: any; depth?: number }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AI JD GENERATOR DIALOG
 // ═══════════════════════════════════════════════════════════════════════════════
-function JDGeneratorDialog({ onUseJD }: { onUseJD: (data: PrefilledJob) => void }) {
+function JDGeneratorDialog({
+  onUseJD,
+  departments,
+}: {
+  onUseJD: (data: PrefilledJob) => void;
+  departments: string[];
+}) {
   const [open,    setOpen]    = useState(false);
   const [title,   setTitle]   = useState("");
   const [dept,    setDept]    = useState("");
   const [extra,   setExtra]   = useState("");
   const [output,  setOutput]  = useState("");
+  const [guidance, setGuidance] = useState("Enter a job title and choose a department to generate a complete job description.");
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [copied,  setCopied]  = useState(false);
+  const safeDepartments = departments ?? [];
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
-  // Auto-generate on title / dept change (900ms debounce)
   useEffect(() => {
-    if (!title.trim() || !dept) { setOutput(""); setError(""); return; }
     if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
-      setLoading(true); setError(""); setOutput("");
-      try   { setOutput(await generateJDWithClaude(title, dept, extra)); }
-      catch { setError("Generation failed. Please try again."); }
-      finally { setLoading(false); }
-    }, 900);
-    return () => { if (debounce.current) clearTimeout(debounce.current); };
-  }, [title, dept]);
+    const { description, guidance: nextGuidance } = buildJobDescription(title, dept, extra);
 
-  // Re-generate on extra requirements change (1.5s debounce)
-  useEffect(() => {
-    if (!title.trim() || !dept || !extra.trim()) return;
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
-      setLoading(true); setError("");
-      try   { setOutput(await generateJDWithClaude(title, dept, extra)); }
-      catch { setError("Generation failed. Please try again."); }
-      finally { setLoading(false); }
-    }, 1500);
-    return () => { if (debounce.current) clearTimeout(debounce.current); };
-  }, [extra]);
+    if (!title.trim() || !dept.trim()) {
+      setLoading(false);
+      setError("");
+      setOutput("");
+      setGuidance(nextGuidance);
+      return () => {
+        if (debounce.current) clearTimeout(debounce.current);
+      };
+    }
 
-  const reset = () => { setTitle(""); setDept(""); setExtra(""); setOutput(""); setError(""); setCopied(false); };
+    const nextRequestId = requestIdRef.current + 1;
+    requestIdRef.current = nextRequestId;
+    setLoading(true);
+    setError("");
+    setGuidance("");
+
+    debounce.current = setTimeout(async () => {
+      try {
+        const generated = await generateJDWithClaude(title, dept, extra);
+        if (requestIdRef.current !== nextRequestId) return;
+        setOutput(generated || description);
+      } catch {
+        if (requestIdRef.current !== nextRequestId) return;
+        setError("We couldn't generate the job description right now. A fallback template is shown below.");
+        setOutput(description);
+      } finally {
+        if (requestIdRef.current === nextRequestId) {
+          setLoading(false);
+        }
+      }
+    }, 650);
+
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, [title, dept, extra]);
+
+  const reset = () => {
+    setTitle("");
+    setDept("");
+    setExtra("");
+    setOutput("");
+    setGuidance("Enter a job title and choose a department to generate a complete job description.");
+    setError("");
+    setCopied(false);
+    setLoading(false);
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(output);
@@ -413,7 +774,7 @@ function JDGeneratorDialog({ onUseJD }: { onUseJD: (data: PrefilledJob) => void 
               <Select value={dept} onValueChange={setDept}>
                 <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  {safeDepartments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -451,13 +812,13 @@ function JDGeneratorDialog({ onUseJD }: { onUseJD: (data: PrefilledJob) => void 
               {!loading && !output && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground select-none">
                   <Wand2 className="w-8 h-8 opacity-25" />
-                  <p className="text-sm">Type a job title + select department to auto-generate</p>
+                  <p className="text-center text-sm">{guidance}</p>
                 </div>
               )}
               {loading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-7 h-7 animate-spin text-primary" />
-                  <p className="text-sm text-primary font-medium">Writing job description…</p>
+                  <p className="text-sm font-medium text-primary">Building a structured job description…</p>
                 </div>
               )}
               {!loading && output && (
@@ -465,11 +826,9 @@ function JDGeneratorDialog({ onUseJD }: { onUseJD: (data: PrefilledJob) => void 
                   {output}
                 </div>
               )}
-              {!loading && error && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex items-center gap-2 text-sm text-destructive">
-                    <AlertCircle className="w-4 h-4" /> {error}
-                  </div>
+              {!loading && error && output && (
+                <div className="absolute left-3 right-3 top-3 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" /> {error}
                 </div>
               )}
             </div>
@@ -508,16 +867,18 @@ interface JobForm { title: string; department: string; description: string; min_
 const emptyJob: JobForm = { title: "", department: "", description: "", min_salary: "", max_salary: "" };
 
 function JobCreateDialog({
-  open, onOpenChange, prefilled,
+  open, onOpenChange, prefilled, departments,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   prefilled: PrefilledJob | null;
+  departments: string[];
 }) {
   const [form,    setForm]    = useState<JobForm>(emptyJob);
   const [errors,  setErrors]  = useState<Partial<JobForm>>({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const safeDepartments = departments ?? [];
 
   // Sync prefilled data when dialog opens
   useEffect(() => {
@@ -612,7 +973,7 @@ function JobCreateDialog({
               <Select value={form.department} onValueChange={v => set("department", v)}>
                 <SelectTrigger className={errors.department ? "border-destructive" : ""}><SelectValue placeholder="Select department" /></SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  {safeDepartments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                 </SelectContent>
               </Select>
               {errors.department && <p className="text-xs text-destructive">{errors.department}</p>}
@@ -719,3 +1080,48 @@ function NewRequirementDialog({ onAdded }: { onAdded: (r: Requirement) => void }
     </Dialog>
   );
 }
+
+type PageErrorBoundaryProps = {
+  children: ReactNode;
+};
+
+type PageErrorBoundaryState = {
+  hasError: boolean;
+};
+
+class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErrorBoundaryState> {
+  state: PageErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+    // Keep the page stable even if a child render path fails.
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Hiring & Workforce Planning</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">Strategic workforce planning with real-time data</p>
+          </div>
+          <Card>
+            <CardContent className="flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center">
+              <AlertCircle className="h-10 w-10 text-destructive" />
+              <p className="text-base font-medium">This section hit a rendering issue.</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                The page stayed available, but some hiring planning content could not be displayed. Refreshing the page should restore the local mock data view.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+

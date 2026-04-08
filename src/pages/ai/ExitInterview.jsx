@@ -1,450 +1,656 @@
-import { useState, useRef, useEffect } from "react";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BrainCircuit,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardList,
+  Gauge,
+  LineChart,
+  MessagesSquare,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  TrendingUp,
+} from "lucide-react";
+import { analyzeExitInterviewMock } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 const QUESTIONS = [
-  { id: 1, text: "Why are you leaving the company?", placeholder: "Share your primary reason for leaving..." },
-  { id: 2, text: "How was your overall experience working here?", placeholder: "Describe your journey — the highs, the lows..." },
-  { id: 3, text: "What did you enjoy most about your role?", placeholder: "What made you excited to come to work?" },
-  { id: 4, text: "What could the company have done better to retain you?", placeholder: "Be honest — this helps us improve..." },
-  { id: 5, text: "Would you recommend this company to others?", placeholder: "Why or why not?" },
+  {
+    id: 1,
+    text: "Why are you leaving the company?",
+    placeholder: "Share the primary reason behind your decision to leave.",
+  },
+  {
+    id: 2,
+    text: "How was your overall experience working here?",
+    placeholder: "Describe the overall employee experience, key moments, and concerns.",
+  },
+  {
+    id: 3,
+    text: "What did you enjoy most about your role?",
+    placeholder: "Highlight the strengths you valued in your work and team environment.",
+  },
+  {
+    id: 4,
+    text: "What could the company have done better to retain you?",
+    placeholder: "Be candid about growth, leadership, compensation, or workload gaps.",
+  },
+  {
+    id: 5,
+    text: "Would you recommend the company to others?",
+    placeholder: "Explain why you would or would not recommend this workplace.",
+  },
 ];
 
-const SENTIMENT_CONFIG = {
-  "Very Positive": { color: "#059669", bg: "#d1fae5", bar: 95 },
-  "Positive": { color: "#16a34a", bg: "#dcfce7", bar: 75 },
-  "Neutral": { color: "#d97706", bg: "#fef3c7", bar: 50 },
-  "Negative": { color: "#dc2626", bg: "#fee2e2", bar: 28 },
-  "Very Negative": { color: "#b91c1c", bg: "#fecaca", bar: 8 },
+const SENTIMENT_META = {
+  "Very Positive": {
+    tone: "text-emerald-700 dark:text-emerald-300",
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
+    chart: "bg-emerald-500",
+  },
+  Positive: {
+    tone: "text-green-700 dark:text-green-300",
+    badge: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300",
+    chart: "bg-green-500",
+  },
+  Neutral: {
+    tone: "text-amber-700 dark:text-amber-300",
+    badge: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+    chart: "bg-amber-500",
+  },
+  Negative: {
+    tone: "text-orange-700 dark:text-orange-300",
+    badge: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
+    chart: "bg-orange-500",
+  },
+  "Very Negative": {
+    tone: "text-red-700 dark:text-red-300",
+    badge: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+    chart: "bg-red-500",
+  },
 };
 
-export default function ExitInterviewBot() {
-  const [phase, setPhase] = useState("intro"); // intro | questions | submitting | results
+const sentimentDistribution = [
+  { label: "Very Positive", value: 18 },
+  { label: "Positive", value: 31 },
+  { label: "Neutral", value: 22 },
+  { label: "Negative", value: 17 },
+  { label: "Very Negative", value: 12 },
+];
+
+const exitReasons = [
+  { label: "Growth opportunities", value: 38 },
+  { label: "Compensation", value: 29 },
+  { label: "Management quality", value: 24 },
+  { label: "Work-life balance", value: 21 },
+];
+
+const riskTrend = [32, 36, 41, 47, 44, 52];
+const departmentExits = [
+  { name: "Engineering", score: 64 },
+  { name: "Sales", score: 78 },
+  { name: "Operations", score: 48 },
+  { name: "HR", score: 26 },
+];
+
+function buildTrendPath(values) {
+  const width = 320;
+  const height = 120;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  return values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * width;
+      const y = height - ((value - min) / Math.max(1, max - min)) * (height - 18) - 9;
+      return `${index === 0 ? "M" : "L"}${x},${y}`;
+    })
+    .join(" ");
+}
+
+function riskTone(risk) {
+  if (risk === "High") return "text-red-700 dark:text-red-300";
+  if (risk === "Medium") return "text-amber-700 dark:text-amber-300";
+  return "text-emerald-700 dark:text-emerald-300";
+}
+
+function riskBadge(risk) {
+  if (risk === "High") return "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300";
+  if (risk === "Medium") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300";
+}
+
+function ExitInterviewBot() {
+  const [phase, setPhase] = useState("intro");
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState(Array(QUESTIONS.length).fill(""));
   const [draft, setDraft] = useState("");
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
-  const [animKey, setAnimKey] = useState(0);
   const textRef = useRef(null);
 
   useEffect(() => {
     if (phase === "questions" && textRef.current) {
       textRef.current.focus();
     }
-  }, [phase, currentQ, animKey]);
+  }, [phase, currentQ]);
 
-  const progress = phase === "questions" ? ((currentQ) / QUESTIONS.length) * 100 : phase === "results" ? 100 : 0;
+  const interviewProgress = phase === "questions" ? ((currentQ + (draft.trim() ? 1 : 0)) / QUESTIONS.length) * 100 : phase === "results" ? 100 : 0;
+
+  const analytics = useMemo(() => {
+    const sentimentScore = results?.sentimentScore ?? 7.1;
+    return [
+      { label: "Average Sentiment Score", value: `${sentimentScore}/10`, icon: BrainCircuit },
+      { label: "Top Reason for Leaving", value: "Growth opportunities", icon: MessagesSquare },
+      { label: "Department Exit Trend", value: "Sales trending higher", icon: TrendingUp },
+    ];
+  }, [results]);
+
+  const sentimentMeta = results ? SENTIMENT_META[results.overallSentiment] || SENTIMENT_META.Neutral : SENTIMENT_META.Neutral;
+  const confidenceScore = results ? Math.min(96, 72 + results.sentimentScore * 2) : 84;
+  const recommendationList = results
+    ? [
+        "Improve manager coaching and feedback quality for at-risk teams.",
+        "Review compensation competitiveness for frequently mentioned exit themes.",
+        "Create clearer internal growth paths and promotion visibility.",
+      ]
+    : [];
 
   function startInterview() {
     setPhase("questions");
     setCurrentQ(0);
-    setDraft("");
-    setAnimKey(k => k + 1);
+    setDraft(answers[0] || "");
+    setError("");
   }
 
   function handleNext() {
     if (!draft.trim()) return;
+
     const updated = [...answers];
     updated[currentQ] = draft.trim();
     setAnswers(updated);
 
     if (currentQ < QUESTIONS.length - 1) {
-      setDraft("");
-      setCurrentQ(q => q + 1);
-      setAnimKey(k => k + 1);
-    } else {
-      submitInterview(updated);
+      const nextIndex = currentQ + 1;
+      setCurrentQ(nextIndex);
+      setDraft(updated[nextIndex] || "");
+      return;
     }
+
+    void submitInterview(updated);
   }
 
   function handleBack() {
     if (currentQ === 0) return;
-    setDraft(answers[currentQ - 1] || "");
-    setCurrentQ(q => q - 1);
-    setAnimKey(k => k + 1);
+    const updated = [...answers];
+    updated[currentQ] = draft;
+    const previousIndex = currentQ - 1;
+    setAnswers(updated);
+    setCurrentQ(previousIndex);
+    setDraft(updated[previousIndex] || "");
   }
 
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleNext();
+  function handleKeyDown(event) {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      handleNext();
+    }
   }
 
   async function submitInterview(allAnswers) {
-    setPhase("submitting");
+    setPhase("analyzing");
     setError("");
+
     try {
-      const formatted = QUESTIONS.map((q, i) =>
-        `Q${i + 1}: ${q.text}\nAnswer: ${allAnswers[i] || "(skipped)"}`
-      ).join("\n\n");
-
-      const prompt = `You are an expert HR analyst. Analyze the following exit interview responses and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
-
-Exit Interview:
-${formatted}
-
-Return exactly this JSON structure:
-{
-  "overallSentiment": "Very Positive" | "Positive" | "Neutral" | "Negative" | "Very Negative",
-  "sentimentScore": <number 1-10>,
-  "retentionRisk": "Low" | "Medium" | "High",
-  "topThemes": ["theme1", "theme2", "theme3"],
-  "executiveSummary": "<2-3 sentence summary>",
-  "strengths": ["strength1", "strength2"],
-  "improvements": ["area1", "area2"],
-  "recommendToOthers": true | false
-}`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-
-      const data = await res.json();
-      const raw = data.content?.map(b => b.text || "").join("") || "";
-      const cleaned = raw.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const parsed = analyzeExitInterviewMock(allAnswers);
       setResults(parsed);
       setPhase("results");
     } catch (err) {
-      setError("Analysis failed. Please try again.");
+      setError("AI analysis failed. Please review the responses and try again.");
       setPhase("questions");
       setCurrentQ(QUESTIONS.length - 1);
+      setDraft(allAnswers[QUESTIONS.length - 1] || "");
     }
   }
 
   function restart() {
     setPhase("intro");
+    setCurrentQ(0);
     setAnswers(Array(QUESTIONS.length).fill(""));
     setDraft("");
     setResults(null);
     setError("");
-    setCurrentQ(0);
   }
 
-  const sentimentMeta = results ? SENTIMENT_CONFIG[results.overallSentiment] || SENTIMENT_CONFIG["Neutral"] : null;
-
   return (
-    <div style={s.shell}>
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        @keyframes barGrow {
-          from { width: 0; }
-        }
-        .fade-up { animation: fadeUp 0.35s cubic-bezier(.25,.8,.25,1) both; }
-        .bar-grow { animation: barGrow 1s cubic-bezier(.25,.8,.25,1) both 0.3s; }
-        textarea:focus { outline: none; border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
-        .btn-primary:hover { background: #4f46e5 !important; }
-        .btn-primary:active { transform: scale(0.98); }
-        .btn-ghost:hover { background: rgba(99,102,241,0.08) !important; color: #6366f1 !important; }
-        .restart-btn:hover { background: #f5f5f7 !important; }
-      `}</style>
-
-      {/* Top bar */}
-      <div style={s.topBar}>
-        <div style={s.logo}>
-          <div style={s.logoIcon}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="6" stroke="white" strokeWidth="1.5" />
-              <path d="M4.5 7L6.5 9L9.5 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <span style={s.logoText}>ExitIQ</span>
-        </div>
-        <span style={s.confidential}>Confidential</span>
-      </div>
-
-      {/* Progress bar */}
-      <div style={s.progressTrack}>
-        <div style={{ ...s.progressFill, width: `${progress}%`, transition: "width 0.5s ease" }} />
-      </div>
-
-      {/* Content */}
-      <div style={s.body}>
-
-        {/* INTRO */}
-        {phase === "intro" && (
-          <div className="fade-up" style={s.card}>
-            <div style={s.introIcon}>
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <rect width="32" height="32" rx="10" fill="#eef2ff" />
-                <path d="M10 16h12M16 10v12" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h1 style={s.h1}>Exit Interview</h1>
-            <p style={s.lead}>
-              Thank you for your time here. Before you go, we'd love to hear your honest thoughts.
-              Your feedback is confidential and helps us build a better workplace.
-            </p>
-            <div style={s.pills}>
-              {["5 questions", "~3 minutes", "AI-analyzed", "Confidential"].map(p => (
-                <span key={p} style={s.pill}>{p}</span>
-              ))}
-            </div>
-            {error && <div style={s.errorBox}>{error}</div>}
-            <button className="btn-primary" style={s.btnPrimary} onClick={startInterview}>
-              Begin Interview
-            </button>
-          </div>
-        )}
-
-        {/* QUESTIONS */}
-        {phase === "questions" && (
-          <div key={animKey} className="fade-up" style={s.card}>
-            <div style={s.qMeta}>
-              <span style={s.qCounter}>Question {currentQ + 1} of {QUESTIONS.length}</span>
-              <div style={s.dotRow}>
-                {QUESTIONS.map((_, i) => (
-                  <div key={i} style={{ ...s.dot, background: i <= currentQ ? "#6366f1" : "#e5e7eb" }} />
-                ))}
+    <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950 sm:px-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        >
+          <div className="relative overflow-hidden px-6 py-8 sm:px-8">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.16),_transparent_36%),radial-gradient(circle_at_right,_rgba(14,165,233,0.12),_transparent_30%)]" />
+            <div className="relative flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <Badge variant="outline" className="mb-3 border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300">
+                  Exit Intelligence System
+                </Badge>
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  Exit Interview AI Bot
+                </h1>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  Capture structured employee feedback, detect sentiment and retention risk, and convert exit interviews into practical HR intelligence.
+                </p>
               </div>
-            </div>
-            <h2 style={s.h2}>{QUESTIONS[currentQ].text}</h2>
-            <textarea
-              ref={textRef}
-              style={s.textarea}
-              placeholder={QUESTIONS[currentQ].placeholder}
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={5}
-            />
-            <div style={s.hint}>Press Ctrl + Enter to continue</div>
-            <div style={s.btnRow}>
-              {currentQ > 0 && (
-                <button className="btn-ghost" style={s.btnGhost} onClick={handleBack}>
-                  ← Back
-                </button>
-              )}
-              <button
-                className="btn-primary"
-                style={{ ...s.btnPrimary, opacity: draft.trim() ? 1 : 0.45, cursor: draft.trim() ? "pointer" : "default", marginTop: 0 }}
-                onClick={handleNext}
-                disabled={!draft.trim()}
-              >
-                {currentQ < QUESTIONS.length - 1 ? "Continue →" : "Submit & Analyze"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* SUBMITTING */}
-        {phase === "submitting" && (
-          <div className="fade-up" style={{ ...s.card, textAlign: "center", padding: "60px 40px" }}>
-            <div style={{ width: 44, height: 44, border: "3px solid #e5e7eb", borderTop: "3px solid #6366f1", borderRadius: "50%", margin: "0 auto 24px", animation: "spin 0.8s linear infinite" }} />
-            <p style={{ color: "#6b7280", fontSize: 15 }}>Analyzing your responses…</p>
-          </div>
-        )}
-
-        {/* RESULTS */}
-        {phase === "results" && results && sentimentMeta && (
-          <div className="fade-up" style={{ ...s.card, maxWidth: 640 }}>
-            <div style={s.resultsHeader}>
-              <span style={s.qCounter}>Analysis Complete</span>
-              <h2 style={{ ...s.h2, marginBottom: 0 }}>Interview Summary</h2>
-            </div>
-
-            {/* Sentiment + Risk row */}
-            <div style={s.metricsRow}>
-              <div style={s.metricBox}>
-                <span style={s.metricLabel}>Overall Sentiment</span>
-                <span style={{ ...s.metricValue, color: sentimentMeta.color }}>
-                  {results.overallSentiment}
-                </span>
-                <div style={s.scoreBarTrack}>
-                  <div
-                    className="bar-grow"
-                    style={{ ...s.scoreBarFill, width: `${sentimentMeta.bar}%`, background: sentimentMeta.color }}
-                  />
+              <div className="rounded-3xl border border-slate-200 bg-white/80 px-5 py-4 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-slate-100 p-3 dark:bg-slate-800">
+                    <Gauge className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Interview Progress</p>
+                    <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{Math.round(interviewProgress)}%</p>
+                  </div>
                 </div>
-                <span style={s.scoreNum}>{results.sentimentScore}/10</span>
-              </div>
-
-              <div style={s.metricBox}>
-                <span style={s.metricLabel}>Retention Risk</span>
-                <span style={{
-                  ...s.metricValue,
-                  color: results.retentionRisk === "High" ? "#dc2626" : results.retentionRisk === "Medium" ? "#d97706" : "#16a34a"
-                }}>
-                  {results.retentionRisk}
-                </span>
-                <span style={s.metricSub}>
-                  {results.recommendToOthers ? "Would recommend to others" : "Would not recommend to others"}
-                </span>
+                <Progress value={interviewProgress} className="mt-4 h-2" />
               </div>
             </div>
-
-            {/* Summary */}
-            <div style={s.summaryBox}>
-              <span style={s.boxLabel}>Executive Summary</span>
-              <p style={s.summaryText}>{results.executiveSummary}</p>
-            </div>
-
-            {/* Themes */}
-            <div style={s.section}>
-              <span style={s.boxLabel}>Key Themes</span>
-              <div style={s.tagRow}>
-                {(results.topThemes || []).map((t, i) => (
-                  <span key={i} style={s.tag}>{t}</span>
-                ))}
-              </div>
-            </div>
-
-            {/* Strengths + Areas */}
-            <div style={s.twoCol}>
-              <div style={{ ...s.miniBox, borderColor: "#bbf7d0" }}>
-                <span style={{ ...s.boxLabel, color: "#16a34a" }}>Strengths</span>
-                {(results.strengths || []).map((str, i) => (
-                  <div key={i} style={s.listItem}>
-                    <span style={{ ...s.listBullet, color: "#16a34a" }}>✓</span> {str}
-                  </div>
-                ))}
-              </div>
-              <div style={{ ...s.miniBox, borderColor: "#fecaca" }}>
-                <span style={{ ...s.boxLabel, color: "#dc2626" }}>Improvement Areas</span>
-                {(results.improvements || []).map((imp, i) => (
-                  <div key={i} style={s.listItem}>
-                    <span style={{ ...s.listBullet, color: "#dc2626" }}>!</span> {imp}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button className="restart-btn" style={s.btnSecondary} onClick={restart}>
-              Start New Interview
-            </button>
           </div>
-        )}
+        </motion.div>
 
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Structured Questions", value: QUESTIONS.length, icon: ClipboardList },
+            { label: "AI Summary Coverage", value: "100%", icon: Sparkles },
+            { label: "Retention Risk Tracking", value: results?.retentionRisk || "Live", icon: ShieldAlert },
+            { label: "Exit Insights Ready", value: phase === "results" ? "Yes" : "In progress", icon: CheckCircle2 },
+          ].map((item) => (
+            <Card key={item.label} className="dark:border-slate-700 dark:bg-slate-900">
+              <CardContent className="flex items-center justify-between p-5">
+                <div>
+                  <p className="text-xs text-slate-500">{item.label}</p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100">{item.value}</p>
+                </div>
+                <item.icon className="h-5 w-5 text-slate-500" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <Card className="dark:border-slate-700 dark:bg-slate-900">
+            <CardHeader>
+              <CardTitle className="text-base">Interview Flow</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AnimatePresence mode="wait">
+                {phase === "intro" && (
+                  <motion.div
+                    key="intro"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="space-y-5"
+                  >
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-800/40">
+                      <Badge variant="outline" className="mb-4">Confidential and AI analyzed</Badge>
+                      <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Turn exit interviews into retention intelligence</h2>
+                      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        This workflow helps HR capture honest feedback, detect recurring themes, estimate future retention risk, and prioritize improvements for similar employee groups.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        "Five structured exit questions",
+                        "Sentiment and retention risk scoring",
+                        "Theme extraction and executive summary",
+                        "HR recommendations for similar employee cohorts",
+                      ].map((item) => (
+                        <div key={item} className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                    {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{error}</div> : null}
+                    <Button onClick={startInterview} className="w-full sm:w-auto">
+                      Start exit interview
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </motion.div>
+                )}
+
+                {phase === "questions" && (
+                  <motion.div
+                    key={`question-${currentQ}`}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="space-y-5"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Question {currentQ + 1} of {QUESTIONS.length}</p>
+                        <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{QUESTIONS[currentQ].text}</h2>
+                      </div>
+                      <Badge variant="outline">Step-based flow</Badge>
+                    </div>
+
+                    <div className="flex gap-2">
+                      {QUESTIONS.map((item, index) => (
+                        <div key={item.id} className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${index <= currentQ ? 100 : 0}%` }}
+                            className="h-full rounded-full bg-indigo-500"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <Textarea
+                      ref={textRef}
+                      rows={7}
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={QUESTIONS[currentQ].placeholder}
+                      className="min-h-[180px] resize-y"
+                    />
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+                      Press Ctrl + Enter to continue. Responses are confidential and used only for AI summarization.
+                    </div>
+
+                    {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{error}</div> : null}
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                      <Button variant="outline" onClick={handleBack} disabled={currentQ === 0}>
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                      </Button>
+                      <Button onClick={handleNext} disabled={!draft.trim()}>
+                        {currentQ === QUESTIONS.length - 1 ? "Submit and analyze" : "Continue"}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {phase === "analyzing" && (
+                  <motion.div
+                    key="analyzing"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="space-y-5 text-center"
+                  >
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/30">
+                      <RefreshCw className="h-7 w-7 animate-spin text-indigo-600 dark:text-indigo-300" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">AI analysis in progress</h2>
+                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                        Generating sentiment classification, retention risk assessment, key themes, and executive recommendations.
+                      </p>
+                    </div>
+                    <Progress value={82} className="h-2" />
+                  </motion.div>
+                )}
+
+                {phase === "results" && results && (
+                  <motion.div
+                    key="results"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="space-y-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Analysis complete</p>
+                        <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">Exit insights dashboard</h2>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline" className={sentimentMeta.badge}>{results.overallSentiment}</Badge>
+                        <Badge variant="outline" className={riskBadge(results.retentionRisk)}>{results.retentionRisk} retention risk</Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                        <p className="text-xs text-slate-500">Sentiment score</p>
+                        <p className={`mt-1 text-3xl font-semibold ${sentimentMeta.tone}`}>{results.sentimentScore}/10</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                        <p className="text-xs text-slate-500">Confidence score</p>
+                        <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-100">{confidenceScore}%</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                        <p className="text-xs text-slate-500">Recommendation intent</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                          {results.recommendToOthers ? "Would recommend" : "Would not recommend"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/40">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Executive summary</p>
+                      <p className="mt-3 text-sm leading-7 text-slate-700 dark:text-slate-200">{results.executiveSummary}</p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Strengths identified</p>
+                        <div className="mt-3 space-y-2">
+                          {results.strengths.map((item) => (
+                            <div key={item} className="flex gap-2 text-sm text-slate-700 dark:text-slate-200">
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+                              <span>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-red-200 bg-red-50/70 p-4 dark:border-red-900 dark:bg-red-950/20">
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-300">Improvement areas</p>
+                        <div className="mt-3 space-y-2">
+                          {results.improvements.map((item) => (
+                            <div key={item} className="flex gap-2 text-sm text-slate-700 dark:text-slate-200">
+                              <CircleAlert className="mt-0.5 h-4 w-4 text-red-500" />
+                              <span>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Key themes</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {results.topThemes.map((theme) => (
+                          <Badge key={theme} variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300">
+                            {theme}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <Button onClick={restart}>Start new interview</Button>
+                      <Button variant="outline" onClick={() => setPhase("questions")}>Review responses</Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </CardContent>
+          </Card>
+
+          <Card className="dark:border-slate-700 dark:bg-slate-900">
+            <CardHeader>
+              <CardTitle className="text-base">Exit Analytics Dashboard</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="insights" className="space-y-4">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="insights">Insights</TabsTrigger>
+                  <TabsTrigger value="charts">Charts</TabsTrigger>
+                  <TabsTrigger value="actions">AI Actions</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="insights" className="space-y-4">
+                  <div className="grid gap-3">
+                    {analytics.map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs text-slate-500">{item.label}</p>
+                            <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{item.value}</p>
+                          </div>
+                          <item.icon className="h-5 w-5 text-slate-500" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <Target className="h-4 w-4 text-indigo-500" />
+                      Retention risk trend
+                    </div>
+                    <svg viewBox="0 0 320 120" className="mt-4 h-32 w-full">
+                      <path d={buildTrendPath(riskTrend)} fill="none" stroke="rgb(99 102 241)" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                    <div className="mt-2 flex justify-between text-xs text-slate-500">
+                      <span>Jan</span>
+                      <span>Feb</span>
+                      <span>Mar</span>
+                      <span>Apr</span>
+                      <span>May</span>
+                      <span>Jun</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Department exit trends</p>
+                    <div className="mt-3 space-y-3">
+                      {departmentExits.map((department) => (
+                        <div key={department.name}>
+                          <div className="mb-1 flex justify-between text-xs text-slate-500">
+                            <span>{department.name}</span>
+                            <span>{department.score}%</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${department.score}%` }}
+                              className={`h-full rounded-full ${department.score > 70 ? "bg-red-500" : department.score > 45 ? "bg-amber-500" : "bg-emerald-500"}`}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="charts" className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sentiment distribution</p>
+                    <div className="mt-4 space-y-3">
+                      {sentimentDistribution.map((item) => {
+                        const meta = SENTIMENT_META[item.label] || SENTIMENT_META.Neutral;
+                        return (
+                          <div key={item.label}>
+                            <div className="mb-1 flex justify-between text-xs text-slate-500">
+                              <span>{item.label}</span>
+                              <span>{item.value}%</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                              <motion.div initial={{ width: 0 }} animate={{ width: `${item.value}%` }} className={`h-full rounded-full ${meta.chart}`} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Common exit reasons</p>
+                    <div className="mt-4 space-y-3">
+                      {exitReasons.map((item) => (
+                        <div key={item.label}>
+                          <div className="mb-1 flex justify-between text-xs text-slate-500">
+                            <span>{item.label}</span>
+                            <span>{item.value}%</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${item.value}%` }} className="h-full rounded-full bg-sky-500" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <LineChart className="h-4 w-4 text-sky-500" />
+                      Prediction explanation panel
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      Risk is inferred from response sentiment, recommendation intent, recurring growth themes, and negative signals around leadership or workload. Confidence rises when the employee gives detailed and consistent answers across multiple questions.
+                    </p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="actions" className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <Sparkles className="h-4 w-4 text-indigo-500" />
+                      AI recommendations
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {(recommendationList.length
+                        ? recommendationList
+                        : [
+                            "Improve management training for teams with recurring feedback concerns.",
+                            "Review promotion and career path transparency for high-performing cohorts.",
+                            "Monitor compensation themes in quarterly exit summaries.",
+                          ]).map((item) => (
+                        <div key={item} className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <ShieldAlert className={`h-4 w-4 ${results ? riskTone(results.retentionRisk) : "text-amber-500"}`} />
+                      Similar employee risk
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      {results
+                        ? `This interview suggests a ${results.retentionRisk.toLowerCase()} retention risk for similar employees if the same themes remain unresolved.`
+                        : "Complete an interview to estimate future retention risk for similar employee groups."}
+                    </p>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
 }
 
-const s = {
-  shell: {
-    minHeight: "100vh",
-    background: "#f9fafb",
-    fontFamily: "'Georgia', 'Times New Roman', serif",
-    display: "flex",
-    flexDirection: "column",
-  },
-  topBar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "16px 28px",
-    background: "white",
-    borderBottom: "1px solid #f3f4f6",
-  },
-  logo: { display: "flex", alignItems: "center", gap: 10 },
-  logoIcon: {
-    width: 28, height: 28, borderRadius: 8, background: "#6366f1",
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  logoText: { fontSize: 16, fontWeight: 700, color: "#111827", letterSpacing: "0.02em" },
-  confidential: {
-    fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
-    color: "#9ca3af", border: "1px solid #e5e7eb", borderRadius: 4, padding: "3px 8px",
-  },
-  progressTrack: { height: 3, background: "#f3f4f6" },
-  progressFill: { height: "100%", background: "linear-gradient(90deg, #6366f1, #818cf8)", borderRadius: 9999 },
-  body: {
-    flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-start",
-    padding: "40px 16px 60px",
-  },
-  card: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: 16,
-    padding: "40px",
-    maxWidth: 560,
-    width: "100%",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.04)",
-  },
-  introIcon: { marginBottom: 20 },
-  h1: { fontSize: 28, fontWeight: 700, color: "#111827", marginBottom: 14, lineHeight: 1.2 },
-  h2: { fontSize: 20, fontWeight: 600, color: "#111827", marginBottom: 20, lineHeight: 1.4 },
-  lead: { fontSize: 15, color: "#6b7280", lineHeight: 1.75, marginBottom: 24 },
-  pills: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 28 },
-  pill: {
-    fontSize: 12, padding: "4px 12px", borderRadius: 9999,
-    background: "#eef2ff", color: "#6366f1", border: "1px solid #e0e7ff",
-  },
-  errorBox: {
-    background: "#fee2e2", color: "#dc2626", borderRadius: 8,
-    padding: "10px 14px", fontSize: 13, marginBottom: 16,
-  },
-  btnPrimary: {
-    display: "block", width: "100%",
-    background: "#6366f1", color: "white", border: "none",
-    borderRadius: 10, padding: "13px 20px",
-    fontSize: 15, fontWeight: 600, cursor: "pointer",
-    marginTop: 8, transition: "background 0.15s",
-  },
-  btnGhost: {
-    background: "transparent", color: "#6b7280",
-    border: "1px solid #e5e7eb", borderRadius: 10,
-    padding: "11px 20px", fontSize: 14, cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  btnSecondary: {
-    display: "block", width: "100%",
-    background: "white", color: "#374151",
-    border: "1px solid #e5e7eb", borderRadius: 10,
-    padding: "12px 20px", fontSize: 14, cursor: "pointer",
-    marginTop: 24, transition: "background 0.15s",
-  },
-  qMeta: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
-  qCounter: { fontSize: 12, color: "#9ca3af", letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "monospace" },
-  dotRow: { display: "flex", gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: "50%", transition: "background 0.3s" },
-  textarea: {
-    width: "100%", boxSizing: "border-box",
-    background: "#fafafa", border: "1.5px solid #e5e7eb", borderRadius: 10,
-    padding: "14px", fontSize: 15, fontFamily: "'Georgia', serif",
-    color: "#111827", lineHeight: 1.7, resize: "vertical",
-    transition: "border-color 0.2s",
-  },
-  hint: { fontSize: 12, color: "#d1d5db", marginTop: 8, marginBottom: 20 },
-  btnRow: { display: "flex", gap: 10, alignItems: "center" },
-  resultsHeader: { marginBottom: 24 },
-  metricsRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 },
-  metricBox: {
-    background: "#fafafa", border: "1px solid #f3f4f6",
-    borderRadius: 12, padding: "16px",
-  },
-  metricLabel: { display: "block", fontSize: 11, color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "monospace", marginBottom: 8 },
-  metricValue: { display: "block", fontSize: 20, fontWeight: 700, marginBottom: 10 },
-  metricSub: { display: "block", fontSize: 12, color: "#9ca3af", marginTop: 8 },
-  scoreBarTrack: { height: 4, background: "#f3f4f6", borderRadius: 9999, overflow: "hidden", marginBottom: 6 },
-  scoreBarFill: { height: "100%", borderRadius: 9999 },
-  scoreNum: { fontSize: 12, color: "#9ca3af", fontFamily: "monospace" },
-  summaryBox: {
-    background: "#fafafa", border: "1px solid #e5e7eb",
-    borderRadius: 12, padding: "16px", marginBottom: 18,
-  },
-  boxLabel: { display: "block", fontSize: 11, color: "#9ca3af", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "monospace", marginBottom: 10 },
-  summaryText: { fontSize: 14, color: "#374151", lineHeight: 1.75, margin: 0 },
-  section: { marginBottom: 18 },
-  tagRow: { display: "flex", flexWrap: "wrap", gap: 8 },
-  tag: {
-    fontSize: 12, padding: "5px 12px", borderRadius: 9999,
-    background: "#eef2ff", color: "#6366f1", border: "1px solid #e0e7ff",
-  },
-  twoCol: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
-  miniBox: {
-    background: "#fafafa", border: "1px solid",
-    borderRadius: 12, padding: "14px",
-  },
-  listItem: { fontSize: 13, color: "#374151", marginTop: 8, display: "flex", gap: 8, lineHeight: 1.5 },
-  listBullet: { fontWeight: 700, flexShrink: 0 },
-};
+export default ExitInterviewBot;

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import axios from "axios";
 import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import api from "@/lib/api";
+import api, { isApiError } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -20,7 +19,7 @@ export default function ForgotPasswordPage() {
       const response = await api.post("/auth/forgot-password", { email });
       setMessage(response.data?.message || "If the account exists, a reset link has been sent.");
     } catch (error) {
-      if (axios.isAxiosError(error)) {
+      if (isApiError(error)) {
         setMessage(error.response?.data?.message || "Could not process request.");
       }
     } finally {

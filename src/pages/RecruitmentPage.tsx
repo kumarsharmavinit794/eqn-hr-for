@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  BriefcaseBusiness,
+  Building2,
   Calendar,
   CheckCircle2,
   Eye,
@@ -15,17 +17,17 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import axios from "axios";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import api from "@/lib/api";
+import api, { isApiError } from "@/lib/api";
 
 type CandidateStatus = "new" | "shortlisted" | "interview" | "rejected";
 
@@ -49,9 +51,20 @@ interface Toast {
 interface JobForm {
   title: string;
   department: string;
+  experience_level: string;
   description: string;
   min_salary: string;
   max_salary: string;
+}
+
+interface Job {
+  id: number;
+  title: string;
+  department: string;
+  description: string;
+  min_salary: number;
+  max_salary: number;
+  status?: string;
 }
 
 const statusColors: Record<CandidateStatus, string> = {
@@ -64,10 +77,38 @@ const statusColors: Record<CandidateStatus, string> = {
 const emptyJob: JobForm = {
   title: "",
   department: "",
+  experience_level: "",
   description: "",
   min_salary: "",
   max_salary: "",
 };
+
+function generateJD(title: string, department: string, experienceLevel: string): string {
+  const level = experienceLevel || "Mid-level";
+  return `## ${title} — ${department} Department
+
+**Role Summary**
+We are looking for a ${level} ${title} to join our ${department} team. The ideal candidate will bring strong expertise and a passion for delivering results.
+
+**Key Responsibilities**
+- Lead and execute core ${title} functions within the ${department} team
+- Collaborate cross-functionally to deliver high-quality outcomes
+- Identify areas for improvement and implement best practices
+- Mentor junior team members and contribute to team growth
+- Report progress and insights to stakeholders regularly
+
+**Required Skills**
+- ${level === "Fresher" ? "0–1 year" : level === "Mid-level" ? "2–4 years" : "5+ years"} of relevant experience in ${department}
+- Strong communication and problem-solving skills
+- Proficiency in tools and technologies relevant to ${title} role
+- Ability to work in a fast-paced, collaborative environment
+- Attention to detail and commitment to quality
+
+**Preferred Qualifications**
+- Bachelor's degree in a relevant field
+- Prior experience in a similar ${title} role
+- Familiarity with industry trends in ${department}`;
+}
 
 let addToast: ((type: "success" | "error", message: string) => void) | null = null;
 
@@ -128,7 +169,7 @@ function ToastContainer() {
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error)) {
+  if (isApiError(error)) {
     return error.response?.data?.message || fallback;
   }
   return fallback;
@@ -200,6 +241,7 @@ export default function RecruitmentPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | CandidateStatus>("all");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCandidates, setTotalCandidates] = useState(0);
@@ -307,9 +349,11 @@ export default function RecruitmentPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <ResumeUploadDialog onUploaded={() => fetchCandidates(1, search, statusFilter)} />
-            <JobCreateDialog onCreated={() => fetchCandidates(page, search, statusFilter)} />
+            <JobCreateDialog onCreated={(newJob) => setJobs((prev) => [newJob, ...prev])} />
           </div>
         </div>
+
+        <JobsSection jobs={jobs} onInitialJobsLoaded={setJobs} />
 
         <div className="grid gap-3 rounded-2xl border border-border/60 bg-card/60 p-4 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
           <div className="relative">
@@ -474,6 +518,164 @@ export default function RecruitmentPage() {
   );
 }
 
+function JDViewerDialog({
+  job,
+  open,
+  onOpenChange,
+}: {
+  job: Job | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  if (!job) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{job.title} - {job.department}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="flex gap-3">
+            <Badge variant="outline">Salary: INR {(job.min_salary / 100000).toFixed(1)}L - INR {(job.max_salary / 100000).toFixed(1)}L</Badge>
+            <Badge variant="outline" className="capitalize">{job.department}</Badge>
+          </div>
+          <div className="mt-4 whitespace-pre-wrap rounded-xl bg-muted/40 p-4 text-sm leading-relaxed text-foreground">
+            {job.description}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JobsSection({
+  jobs,
+  onInitialJobsLoaded,
+}: {
+  jobs: Job[];
+  onInitialJobsLoaded: (jobs: Job[]) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [jdViewerOpen, setJdViewerOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchJobs = async () => {
+      setLoading(true);
+      try {
+        const response = await api.get("/jobs");
+        const payload = response.data as { data?: unknown };
+        const nextJobs = Array.isArray(payload?.data)
+          ? (payload.data as Job[])
+          : Array.isArray(response.data)
+            ? (response.data as Job[])
+            : [];
+
+        if (active) {
+          onInitialJobsLoaded(nextJobs);
+        }
+      } catch {
+        if (active) {
+          onInitialJobsLoaded([]);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void fetchJobs();
+
+    return () => {
+      active = false;
+    };
+  }, [onInitialJobsLoaded]);
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Job Postings</h2>
+          <p className="text-sm text-muted-foreground">Browse current openings and view full job descriptions.</p>
+        </div>
+        <Badge variant="outline" className="text-xs">
+          {jobs.length} role{jobs.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center rounded-2xl border border-border/60 bg-card/50 py-12 text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading job postings...
+        </div>
+      ) : jobs.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border/70 py-12 text-center text-muted-foreground">
+          No job postings available yet.
+        </p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {jobs.map((job, index) => (
+            <motion.div
+              key={job.id}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.04 }}
+            >
+              <Card className="glass-card h-full">
+                <CardContent className="space-y-4 p-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+                      <BriefcaseBusiness className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-semibold">{job.title}</h3>
+                      <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        {job.department || "General"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="line-clamp-4 text-sm leading-6 text-muted-foreground">
+                    {job.description || "Role details will be shared by HR."}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="rounded-full border border-border px-3 py-1 uppercase tracking-[0.16em] text-muted-foreground">
+                      {job.status || "open"}
+                    </span>
+                    <span className="font-medium">
+                      INR {job.min_salary} - {job.max_salary}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedJob(job);
+                        setJdViewerOpen(true);
+                      }}
+                    >
+                      <Eye className="mr-1 h-3 w-3" /> View JD
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      <JDViewerDialog job={selectedJob} open={jdViewerOpen} onOpenChange={setJdViewerOpen} />
+    </section>
+  );
+}
+
 function ResumeUploadDialog({ onUploaded }: { onUploaded: () => void }) {
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -595,7 +797,7 @@ function ResumeUploadDialog({ onUploaded }: { onUploaded: () => void }) {
   );
 }
 
-function JobCreateDialog({ onCreated }: { onCreated: () => void }) {
+function JobCreateDialog({ onCreated }: { onCreated: (job: Job) => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<JobForm>(emptyJob);
   const [errors, setErrors] = useState<Partial<JobForm>>({});
@@ -620,19 +822,30 @@ function JobCreateDialog({ onCreated }: { onCreated: () => void }) {
     return Object.keys(nextErrors).length === 0;
   };
 
+  const handleAutoFillJD = () => {
+    if (!form.title.trim() || !form.department) {
+      toast("error", "Please enter Job Title and select Department first.");
+      return;
+    }
+
+    setField("description", generateJD(form.title.trim(), form.department, form.experience_level));
+  };
+
   const handleSubmit = async () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await api.post("/jobs", {
+      const response = await api.post("/jobs", {
         title: form.title.trim(),
         department: form.department,
         description: form.description.trim(),
         min_salary: Number(form.min_salary),
         max_salary: Number(form.max_salary),
       });
+      const payload = response.data as { data?: Job };
+      const newJob = payload?.data ?? (response.data as Job);
       toast("success", "Job posting created successfully");
-      onCreated();
+      onCreated(newJob);
       setOpen(false);
       setForm(emptyJob);
       setErrors({});
@@ -698,9 +911,28 @@ function JobCreateDialog({ onCreated }: { onCreated: () => void }) {
           </div>
 
           <div className="space-y-1">
-            <Label>
-              Description <span className="text-destructive">*</span>
-            </Label>
+            <Label>Experience Level</Label>
+            <Select value={form.experience_level} onValueChange={(value) => setField("experience_level", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select experience level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Fresher">Fresher</SelectItem>
+                <SelectItem value="Mid-level">Mid-level</SelectItem>
+                <SelectItem value="Senior">Senior</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <Label>
+                Description <span className="text-destructive">*</span>
+              </Label>
+              <Button type="button" variant="outline" size="sm" onClick={handleAutoFillJD}>
+                ✨ Auto-fill JD
+              </Button>
+            </div>
             <Textarea
               value={form.description}
               onChange={(event) => setField("description", event.target.value)}
