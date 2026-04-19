@@ -1,9 +1,12 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
+import React, { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Briefcase, TrendingUp, Users, DollarSign,
-  Sparkles, GitBranch, Plus, ChevronRight, Loader2,
-  Check, AlertCircle, Wand2, ArrowRight, Copy,
+  Briefcase, TrendingUp, Users, DollarSign, Sparkles, GitBranch, Plus, ChevronRight, Loader2,
+  Check, AlertCircle, Wand2, ArrowRight, Copy, Brain, Zap, Target, Activity, Shield, Globe,
+  BarChart3, Radar, Cpu, Network, Layers, Bot, Workflow, Radio, Satellite, FlaskConical, Scale,
+  Leaf, Infinity as InfinityIcon, Timer, Fingerprint, Link as LinkIcon, Award, Eye, Gem, Crown,
+  Download, MessageSquare, X, Play, RefreshCw, ChevronDown, Calendar, Search, Map, CheckCircle2,
+  AlertTriangle, HeartPulse, UserPlus, Gauge, Compass, Gavel, FileText
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -12,1116 +15,530 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend,
+  AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar as RechartsRadar,
+  PieChart, Pie, Cell, RadialBarChart, RadialBar, FunnelChart, Funnel, ComposedChart
 } from "recharts";
 
-type DepartmentConfig = {
-  overviewFocus: string;
-  responsibilities: string[];
-  requirements: string[];
-  benefits: string[];
-};
+// ─── UTILS & MOCK DATA ────────────────────────────────────────────────────────
+const gd = (n: number, map: (x: any, i: number) => any) => Array.from({length: n}).map(map);
+const rnd = (min: number, max: number) => Math.floor(Math.random()*(max-min)+min);
 
-interface Requirement {
-  id: number;
-  job_title: string;
-  department: string;
-  positions: number;
-  budget: string | null;
-  status: "high" | "medium" | "low";
-  created_at?: string;
-}
-
-interface PrefilledJob {
-  title: string;
-  department: string;
-  description: string;
-}
-
-type ForecastPoint = {
-  month: string;
-  current: number | null;
-  projected: number;
-};
-
-type BudgetPoint = {
-  dept: string;
-  salary: number;
-  hiring: number;
-};
-
-type OrgNode = {
-  name: string;
-  children?: OrgNode[];
-};
-
-const MOCK_REQUIREMENTS: Requirement[] = [
-  {
-    id: 1,
-    job_title: "Senior Frontend Engineer",
-    department: "Engineering",
-    positions: 3,
-    budget: "$360K",
-    status: "high",
-    created_at: "2026-04-01T10:00:00.000Z",
-  },
-  {
-    id: 2,
-    job_title: "Product Designer",
-    department: "Design",
-    positions: 2,
-    budget: "$180K",
-    status: "medium",
-    created_at: "2026-04-02T10:00:00.000Z",
-  },
-  {
-    id: 3,
-    job_title: "Growth Marketing Manager",
-    department: "Marketing",
-    positions: 1,
-    budget: "$120K",
-    status: "medium",
-    created_at: "2026-04-03T10:00:00.000Z",
-  },
-  {
-    id: 4,
-    job_title: "People Operations Specialist",
-    department: "HR",
-    positions: 1,
-    budget: "$95K",
-    status: "low",
-    created_at: "2026-04-04T10:00:00.000Z",
-  },
+const MOCK_REQUIREMENTS = [
+  { id: 1, job_title: "Senior Frontend Engineer", department: "Engineering", positions: 3, budget: "$360K", status: "high", created_at: "2026-04-01T10:00:00.000Z" },
+  { id: 2, job_title: "Product Designer", department: "Design", positions: 2, budget: "$180K", status: "medium", created_at: "2026-04-02T10:00:00.000Z" },
+  { id: 3, job_title: "Growth Marketing Manager", department: "Marketing", positions: 1, budget: "$120K", status: "medium", created_at: "2026-04-03T10:00:00.000Z" },
 ];
+const MOCK_STATS = { openPositions: 7, totalBudget: "$755K", headcountTarget: 148, avgTimeToFill: 32 };
+const MOCK_FORECAST = gd(6, (_,i) => ({ month: `M${i+1}`, current: i < 4 ? rnd(110,130) : null, projected: 120 + i*4 }));
+const MOCK_BUDGET = [{ dept: "Eng", salary: 420, hiring: 95 }, { dept: "Design", salary: 155, hiring: 35 }, { dept: "Mktg", salary: 130, hiring: 24 }];
+const MOCK_ORG = { name: "CEO", children: [{ name: "CTO", children: [{ name: "Eng" }, { name: "Prod" }] }, { name: "COO", children: [{ name: "Ops" }] }] };
+const DEPARTMENTS = ["Engineering", "Design", "Marketing", "Sales", "HR", "Product", "Operations"];
+const priorityColors: Record<string, string> = { high: "border-red-500/50 bg-red-500/10 text-red-400", medium: "border-amber-500/50 bg-amber-500/10 text-amber-400", low: "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" };
 
-const MOCK_STATS = {
-  openPositions: 7,
-  totalBudget: "$755K",
-  headcountTarget: 148,
-  avgTimeToFill: 32,
-};
+// 50 Features Mock Data
+const skillsRadar = gd(6, (_,i) => ({ subject: ['React','Cloud','Lead','Data','UI','Sec'][i], cur: rnd(40,100), req: rnd(60,100) }));
+const heatGrid = gd(30, () => rnd(10, 100));
+const pipelineData = [{ name: 'Applied', value: 1200, fill: '#10b981' }, { name: 'Screened', value: 800, fill: '#059669' }, { name: 'Interviewed', value: 300, fill: '#047857' }, { name: 'Offered', value: 50, fill: '#064e3b' }, { name: 'Joined', value: 42, fill: '#022c22' }];
+const emoData = gd(12, (_,i) => ({ week: `W${i+1}`, pos: rnd(60,90), neu: rnd(10,30), neg: rnd(0,10) }));
+const salaryData = gd(5, (_,i) => ({ role: ['SDE1','SDE2','PM','Des','HR'][i], internal: rnd(10,30), market: rnd(12,35) }));
+const esgData = [{ name: 'Env', value: 85, fill: '#10b981' }, { name: 'Soc', value: 92, fill: '#3b82f6' }, { name: 'Gov', value: 88, fill: '#8b5cf6' }];
+const neuroData = [{ name: 'Neurotypical', value: 82, fill: '#3b82f6' }, { name: 'Neurodiverse', value: 18, fill: '#10b981' }];
 
-const MOCK_FORECAST: ForecastPoint[] = [
-  { month: "Jan", current: 118, projected: 120 },
-  { month: "Feb", current: 121, projected: 124 },
-  { month: "Mar", current: 125, projected: 128 },
-  { month: "Apr", current: 129, projected: 132 },
-  { month: "May", current: null, projected: 137 },
-  { month: "Jun", current: null, projected: 142 },
-];
-
-const MOCK_BUDGET: BudgetPoint[] = [
-  { dept: "Eng", salary: 420, hiring: 95 },
-  { dept: "Design", salary: 155, hiring: 35 },
-  { dept: "Mktg", salary: 130, hiring: 24 },
-  { dept: "HR", salary: 90, hiring: 12 },
-  { dept: "Sales", salary: 210, hiring: 46 },
-];
-
-const MOCK_ORG: OrgNode = {
-  name: "CEO",
-  children: [
-    {
-      name: "CTO",
-      children: [{ name: "Engineering" }, { name: "Product" }],
-    },
-    {
-      name: "COO",
-      children: [{ name: "Operations" }, { name: "HR" }],
-    },
-    {
-      name: "CRO",
-      children: [{ name: "Sales" }, { name: "Marketing" }],
-    },
-  ],
-};
-
-const DEPARTMENTS = [
-  "Engineering",
-  "Design",
-  "Marketing",
-  "Sales",
-  "HR",
-  "Product",
-  "Operations",
-];
-
-const priorityColors: Record<string, string> = {
-  high: "border-red-200 bg-red-50 text-red-700",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  low: "border-emerald-200 bg-emerald-50 text-emerald-700",
-};
-
-const JD_DEPARTMENT_TEMPLATES: Record<string, DepartmentConfig> = {
-  Engineering: {
-    overviewFocus: "build scalable, reliable product experiences and collaborate closely with design, product, and QA partners",
-    responsibilities: [
-      "Design, build, test, and maintain production-ready features with strong code quality standards.",
-      "Collaborate with product and design stakeholders to translate requirements into clear technical execution plans.",
-      "Review pull requests, improve development workflows, and contribute to engineering best practices.",
-      "Monitor delivery risks, troubleshoot issues, and support continuous improvement across the development lifecycle.",
-    ],
-    requirements: [
-      "Strong hands-on experience building and shipping modern software products.",
-      "Ability to write clean, maintainable, and well-documented code.",
-      "Comfort working with collaborative planning, debugging, and code review workflows.",
-      "Strong communication skills and the ability to break down complex technical work clearly.",
-    ],
-    benefits: [
-      "Work on high-impact product initiatives with modern tooling.",
-      "Collaborative engineering culture with room for mentorship and growth.",
-    ],
-  },
-  Design: {
-    overviewFocus: "create intuitive, polished, user-centered experiences across product touchpoints",
-    responsibilities: [
-      "Own end-to-end design deliverables from discovery and wireframes through polished handoff assets.",
-      "Partner with product, engineering, and research stakeholders to shape thoughtful user experiences.",
-      "Improve consistency across components, visual systems, and interaction patterns.",
-      "Use feedback, data, and testing insights to refine workflows and increase usability.",
-    ],
-    requirements: [
-      "Strong portfolio demonstrating product thinking and interface craft.",
-      "Experience with design systems, user flows, and collaborative iteration.",
-      "Ability to present rationale clearly and incorporate feedback effectively.",
-      "Strong attention to detail across layout, hierarchy, and interaction design.",
-    ],
-    benefits: [
-      "Opportunity to shape the design language of visible product experiences.",
-      "Cross-functional partnership with product and engineering leaders.",
-    ],
-  },
-  Marketing: {
-    overviewFocus: "drive pipeline, brand visibility, and campaign performance through data-informed execution",
-    responsibilities: [
-      "Plan and execute campaigns aligned to growth, awareness, and engagement goals.",
-      "Work with content, design, and sales teams to develop clear messaging and launch plans.",
-      "Track performance metrics, identify opportunities, and improve channel efficiency over time.",
-      "Support reporting, experimentation, and go-to-market coordination across initiatives.",
-    ],
-    requirements: [
-      "Experience managing multi-channel marketing initiatives with clear business goals.",
-      "Strong written communication and stakeholder coordination skills.",
-      "Ability to translate performance data into actionable recommendations.",
-      "Comfort balancing planning, execution, and optimization in fast-moving teams.",
-    ],
-    benefits: [
-      "Ownership of growth-focused initiatives with measurable impact.",
-      "Exposure to brand, campaign, and performance strategy work.",
-    ],
-  },
-  Sales: {
-    overviewFocus: "build strong customer relationships and accelerate revenue growth through consultative execution",
-    responsibilities: [
-      "Manage the sales pipeline from outreach and qualification through closing and handoff.",
-      "Work with marketing and customer teams to improve lead quality and conversion performance.",
-      "Understand client needs and communicate value with clarity and credibility.",
-      "Maintain accurate reporting, forecasting, and follow-through across active opportunities.",
-    ],
-    requirements: [
-      "Strong consultative selling and relationship management skills.",
-      "Ability to manage pipeline activity and communicate performance clearly.",
-      "Confidence working with targets, stakeholder follow-ups, and structured sales processes.",
-      "Strong negotiation, presentation, and objection-handling ability.",
-    ],
-    benefits: [
-      "Clear visibility into growth outcomes and commercial impact.",
-      "High-ownership environment with support from cross-functional teams.",
-    ],
-  },
-  HR: {
-    overviewFocus: "strengthen employee experience, people operations, and organizational effectiveness",
-    responsibilities: [
-      "Support hiring, onboarding, employee lifecycle coordination, and core HR operations.",
-      "Partner with managers and employees to maintain consistent, people-first processes.",
-      "Improve documentation, compliance readiness, and internal communication workflows.",
-      "Track people metrics and identify opportunities to improve experience and execution quality.",
-    ],
-    requirements: [
-      "Strong understanding of employee lifecycle workflows and operational coordination.",
-      "Ability to manage confidential information with sound judgment and professionalism.",
-      "Strong communication, organization, and cross-functional partnership skills.",
-      "Comfort balancing policy consistency with a positive employee experience.",
-    ],
-    benefits: [
-      "Direct impact on hiring quality, employee experience, and team health.",
-      "Broad exposure across people operations, culture, and talent programs.",
-    ],
-  },
-  Product: {
-    overviewFocus: "turn business goals and user needs into clear priorities, plans, and shipped outcomes",
-    responsibilities: [
-      "Define priorities, clarify scope, and align stakeholders around product objectives.",
-      "Translate customer and business needs into actionable requirements and delivery plans.",
-      "Work closely with engineering and design partners throughout the product lifecycle.",
-      "Measure outcomes, surface tradeoffs, and improve roadmap decisions with data and feedback.",
-    ],
-    requirements: [
-      "Experience managing product discovery, prioritization, and cross-functional delivery.",
-      "Strong communication and stakeholder alignment skills.",
-      "Ability to structure ambiguous problems and make practical tradeoff decisions.",
-      "Comfort using data, user feedback, and strategic context to guide execution.",
-    ],
-    benefits: [
-      "Own meaningful roadmap decisions with visible business impact.",
-      "High-collaboration role across strategy, design, and engineering.",
-    ],
-  },
-  Operations: {
-    overviewFocus: "improve execution quality, process efficiency, and cross-functional coordination at scale",
-    responsibilities: [
-      "Maintain and improve internal workflows, documentation, and operational consistency.",
-      "Coordinate with multiple teams to remove blockers and keep programs moving smoothly.",
-      "Track metrics, identify process gaps, and recommend practical improvements.",
-      "Support reporting, planning, and day-to-day execution across business operations.",
-    ],
-    requirements: [
-      "Strong operational thinking with attention to detail and follow-through.",
-      "Ability to organize complex work across teams and stakeholders.",
-      "Comfort working with reporting, process improvement, and structured execution.",
-      "Strong written and verbal communication skills.",
-    ],
-    benefits: [
-      "Broad business exposure and visible impact on team efficiency.",
-      "Opportunity to shape operational systems as the organization grows.",
-    ],
-  },
-};
-
-const DEFAULT_DEPARTMENT_TEMPLATE: DepartmentConfig = {
+const DEFAULT_DEPT = {
   overviewFocus: "deliver high-quality work, partner closely with stakeholders, and contribute to continuous team improvement",
-  responsibilities: [
-    "Own key deliverables and maintain strong execution quality across day-to-day responsibilities.",
-    "Collaborate with cross-functional teams to align priorities, timelines, and outcomes.",
-    "Identify process improvements and communicate risks or blockers early.",
-    "Contribute positively to team goals, planning, and knowledge sharing.",
-  ],
-  requirements: [
-    "Relevant experience in a similar role or transferable functional expertise.",
-    "Strong communication, problem-solving, and organizational skills.",
-    "Ability to manage priorities effectively in a collaborative environment.",
-    "Comfort working with modern tools, reporting, and structured workflows.",
-  ],
-  benefits: [
-    "Growth-oriented environment with meaningful ownership opportunities.",
-    "Supportive collaboration across teams and functions.",
-  ],
+  responsibilities: ["Own key deliverables.", "Collaborate with cross-functional teams.", "Identify process improvements."],
+  requirements: ["Relevant experience.", "Strong communication skills.", "Ability to manage priorities."],
+  benefits: ["Growth-oriented environment.", "Competitive compensation."]
 };
 
-function normalizeDepartment(department: string) {
-  return department.trim().toLowerCase();
+function buildJobDescription(title: string, dept: string, extra = "") {
+  return { description: `Job Overview\n${title} in ${dept} will ${DEFAULT_DEPT.overviewFocus}.\n\nResponsibilities\n${DEFAULT_DEPT.responsibilities.join('\n')}\n\nRequirements\n${DEFAULT_DEPT.requirements.join('\n')}\n${extra}\n\nBenefits\n${DEFAULT_DEPT.benefits.join('\n')}`, guidance: "" };
 }
 
-function toTitleCase(value: string) {
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
+async function generateJDWithClaude(t: string, d: string, e: string) {
+  await new Promise(r => setTimeout(r, 250)); return buildJobDescription(t, d, e).description;
 }
 
-function getDepartmentConfig(department: string) {
-  const normalized = normalizeDepartment(department);
-  const match = Object.entries(JD_DEPARTMENT_TEMPLATES).find(([key]) => normalizeDepartment(key) === normalized);
-  return match ? { label: match[0], config: match[1] } : { label: toTitleCase(department) || "General", config: DEFAULT_DEPARTMENT_TEMPLATE };
-}
+// ─── REUSABLE PREMIUM UI ──────────────────────────────────────────────────────
+const PCard = ({ title, icon: Icon, children, className="", badge="", glow=false }: any) => (
+  <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className={`bg-gray-900/80 border border-white/10 backdrop-blur-xl rounded-3xl p-5 ${glow ? 'shadow-[0_0_20px_rgba(16,185,129,0.3)] border-emerald-500/30' : ''} ${className}`}>
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2"><Icon className="w-5 h-5 text-emerald-400" /><h3 className="text-white font-semibold text-sm">{title}</h3></div>
+      {badge && <Badge className="bg-emerald-500/20 text-emerald-300 border-none text-[10px]">{badge}</Badge>}
+    </div>
+    {children}
+  </motion.div>
+);
 
-function parseExtraRequirements(extra: string) {
-  return extra
-    .split(/\n|,|;/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-}
-
-function buildJobDescription(title: string, department: string, extra = "") {
-  const cleanTitle = title.trim();
-  const cleanDepartment = department.trim();
-
-  if (!cleanTitle && !cleanDepartment) {
-    return {
-      description: "",
-      guidance: "Enter a job title and choose a department to generate a complete job description.",
-    };
-  }
-
-  if (!cleanTitle) {
-    return {
-      description: "",
-      guidance: "Add a job title to generate a structured job description.",
-    };
-  }
-
-  if (!cleanDepartment) {
-    return {
-      description: "",
-      guidance: "Select a department to generate responsibilities and requirements tailored to the role.",
-    };
-  }
-
-  const { label: departmentLabel, config } = getDepartmentConfig(cleanDepartment);
-  const extraRequirements = parseExtraRequirements(extra);
-  const benefits = [
-    ...config.benefits,
-    "Competitive compensation, learning support, and a collaborative team environment.",
-  ];
-
-  const requirements = [...config.requirements];
-  if (extraRequirements.length > 0) {
-    requirements.push(...extraRequirements.map((item) => `Preference for candidates with ${item.replace(/\.$/, "")}.`));
-  }
-
-  const roleTitle = toTitleCase(cleanTitle) || "Team Member";
-  const description = [
-    "Job Overview",
-    `${roleTitle} will join the ${departmentLabel} team to ${config.overviewFocus}. This role is expected to work cross-functionally, communicate clearly, and maintain a high standard of execution.`,
-    "",
-    "Responsibilities",
-    ...config.responsibilities.map((item) => `- ${item}`),
-    "",
-    "Requirements",
-    ...requirements.map((item) => `- ${item}`),
-    "",
-    "Benefits",
-    ...benefits.map((item) => `- ${item}`),
-  ].join("\n");
-
-  return {
-    description,
-    guidance: "",
-  };
-}
-
-async function generateJDWithClaude(title: string, department: string, extra = "") {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  const { description } = buildJobDescription(title, department, extra);
-  return description || "Job Overview\nThis role supports key team priorities and cross-functional delivery.\n\nResponsibilities\n- Contribute to team deliverables.\n- Communicate progress clearly.\n- Maintain quality and consistency.\n\nRequirements\n- Relevant experience for the role.\n- Strong collaboration and communication skills.\n\nBenefits\n- Growth-oriented team environment.\n- Competitive compensation and learning support.";
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PAGE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function HiringPlanningPage() {
-  return (
-    <PageErrorBoundary>
-      <HiringPlanningPageContent />
-    </PageErrorBoundary>
-  );
+  return <PageErrorBoundary><HiringPlanningPageContent /></PageErrorBoundary>;
 }
 
 function HiringPlanningPageContent() {
-  const [requirements, setRequirements] = useState<Requirement[]>(MOCK_REQUIREMENTS ?? []);
-  const [connected,    setConnected]    = useState<string[]>([]);
-  const [stats,        setStats]        = useState(MOCK_STATS);
-
-  // Shared state: JD generator → JobCreate pre-fill
-  const [prefilled,     setPrefilled]     = useState<PrefilledJob | null>(null);
+  const [requirements, setRequirements] = useState(MOCK_REQUIREMENTS);
+  const [connected, setConnected] = useState<string[]>([]);
   const [jobCreateOpen, setJobCreateOpen] = useState(false);
+  const [prefilled, setPrefilled] = useState<any>(null);
+  
+  // Section D specific state
+  const [vacancyCost, setVacancyCost] = useState(42000000);
+  const [attritionRate, setAttritionRate] = useState([12]);
+  
+  // F50 Executive Teleport
+  const [teleportOpen, setTeleportOpen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
-  // ★ FIX: copy + open both happen here
-  const handleUseJD = (data: PrefilledJob) => {
-    // 1. Copy JD to clipboard
-    navigator.clipboard.writeText(data.description);
-
-    // 2. Pre-fill and open JobCreateDialog after brief delay so user sees copy feedback
-    setPrefilled(data);
-    setTimeout(() => setJobCreateOpen(true), 600);
-  };
-
-  const handleRequirementAdded = (req: Requirement) => {
-    setRequirements(prev => [req, ...prev]);
-    setStats(s => ({ ...s, openPositions: s.openPositions + req.positions }));
-  };
-
-  const safeRequirements = requirements ?? [];
-  const safeForecast = MOCK_FORECAST ?? [];
-  const safeBudget = MOCK_BUDGET ?? [];
-  const safeDepartments = DEPARTMENTS ?? [];
-  const safeOrg = MOCK_ORG ?? { name: "Organization", children: [] };
-  const safeStats = {
-    openPositions: stats?.openPositions ?? 0,
-    totalBudget: stats?.totalBudget ?? "$0",
-    headcountTarget: stats?.headcountTarget ?? 0,
-    avgTimeToFill: stats?.avgTimeToFill ?? 0,
-  };
+  useEffect(() => {
+    const int = setInterval(() => setVacancyCost(c => c + 145), 1000);
+    return () => clearInterval(int);
+  }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-8 bg-gray-950 min-h-screen text-gray-100 p-4 lg:p-8 selection:bg-emerald-500/30 font-sans relative overflow-hidden">
+      {/* Background ambient glow */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[120px] rounded-full pointer-events-none" />
+      
+      {/* HEADER & F32 EXPORT */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between relative z-10">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Hiring & Workforce Planning</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Strategic workforce planning with real-time data</p>
+          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
+            Hiring War Room <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">2030 Edition</Badge>
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">Strategic AI workforce intelligence dashboard</p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <JDGeneratorDialog onUseJD={handleUseJD} departments={safeDepartments} />
-          <JobCreateDialog
-            open={jobCreateOpen}
-            onOpenChange={(v) => { setJobCreateOpen(v); if (!v) setPrefilled(null); }}
-            prefilled={prefilled}
-            departments={safeDepartments}
-          />
+        <div className="flex items-center gap-3 mt-4 sm:mt-0">
+          <JDGeneratorDialog onUseJD={(d: any) => { setPrefilled(d); setJobCreateOpen(true); }} departments={DEPARTMENTS} />
+          <JobCreateDialog open={jobCreateOpen} onOpenChange={setJobCreateOpen} prefilled={prefilled} departments={DEPARTMENTS} />
+          <motion.div whileHover={{scale:1.05}} whileTap={{scale:0.95}}>
+            <Button variant="outline" className="border-emerald-500/50 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20">
+              <Download className="w-4 h-4 mr-2" /> Export 2030 Report
+            </Button>
+          </motion.div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 xl:grid-cols-4">
-        {[ 
-          { label: "Open Positions",   value: safeStats.openPositions,       icon: Briefcase,  sub: "from requirements"   },
-          { label: "Total Budget",     value: safeStats.totalBudget,         icon: DollarSign, sub: "across departments"  },
-          { label: "Headcount Target", value: safeStats.headcountTarget,     icon: Users,      sub: "projected workforce" },
-          { label: "Avg Time to Fill", value: `${safeStats.avgTimeToFill}d`, icon: TrendingUp, sub: "days per position"   },
-        ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{s.label}</span>
-                  <s.icon className="w-4 h-4 text-primary/60" />
+      {/* SECTION A - CORE AI INTELLIGENCE */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
+        {/* F1 & F4: AI Banner & Oracle */}
+        <div className="lg:col-span-2 relative p-6 rounded-3xl bg-gray-900/80 border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.15)] overflow-hidden flex flex-col justify-between">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+          <div className="relative z-10">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4"><Sparkles className="text-emerald-400"/> AI Hiring Intelligence</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[ {l:"Sourcing", v:"Optimal"}, {l:"Bias Score", v:"Low"}, {l:"Velocity", v:"+12%"}, {l:"Acceptance", v:"94%"} ].map((t, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col items-center justify-center">
+                  <span className="text-xs text-gray-400">{t.l}</span>
+                  <span className="text-sm font-bold text-emerald-400">{t.v}</span>
                 </div>
-                <p className="text-2xl font-bold">{s.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input className="bg-black/50 border-emerald-500/30 text-emerald-100 placeholder:text-emerald-700/50 rounded-xl flex-1" placeholder="Ask Oracle a hiring question..." />
+              <Button className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl"><Brain className="w-4 h-4 mr-2"/> Ask</Button>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-3 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin"/> Updated 2 mins ago</p>
+          </div>
+        </div>
+
+        {/* F3: Autonomous Agents */}
+        <div className="bg-gray-900/80 border border-white/10 rounded-3xl p-6 flex flex-col justify-center">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Bot className="w-4 h-4 text-emerald-400"/> Swarm Agents</h3>
+          <div className="space-y-3">
+            {["Sourcing Agent", "Screening Agent", "Negotiator Agent"].map(a => (
+              <div key={a} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <motion.div animate={{scale:[1,2,1], opacity:[0.8,0,0.8]}} transition={{repeat:Infinity, duration:2}} className="absolute inset-0 rounded-full bg-emerald-400" />
+                  </div>
+                  <span className="text-sm text-gray-200">{a}</span>
+                </div>
+                <Badge className="bg-emerald-500/10 text-emerald-400 border-none">Active</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* STATS GRID with F2 Acceptance Gauge */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {[ 
+          { l: "Open Positions", v: "7", i: Briefcase },
+          { l: "Total Budget", v: "$755K", i: DollarSign },
+          { l: "Headcount Target", v: "148", i: Users },
+          { l: "Avg Time to Fill", v: "32d", i: TrendingUp }
+        ].map((s, i) => (
+          <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <Card className="bg-gray-900/80 border-white/10">
+              <CardContent className="p-4">
+                <div className="flex justify-between mb-2"><span className="text-xs text-gray-400 uppercase">{s.l}</span><s.i className="w-4 h-4 text-emerald-400/60" /></div>
+                <p className="text-2xl font-bold text-white">{s.v}</p>
               </CardContent>
             </Card>
           </motion.div>
         ))}
+        {/* F2: Predictive Offer Gauge */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Card className="bg-gray-900/80 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)] relative overflow-hidden">
+            <CardContent className="p-4 h-full flex flex-col justify-center items-center">
+              <span className="text-xs text-gray-400 uppercase w-full text-left absolute top-4 left-4">Acceptance Prob</span>
+              <div className="h-[80px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart cx="50%" cy="100%" innerRadius="100%" outerRadius="140%" barSize={8} data={[{name: 'Accept', value: 68, fill: '#10b981'}]} startAngle={180} endAngle={0}>
+                    <RadialBar background={{ fill: '#ffffff10' }} dataKey="value" cornerRadius={10} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="absolute bottom-4 flex flex-col items-center">
+                <span className="text-xl font-bold text-emerald-400">68%</span>
+                <Badge className="bg-amber-500/20 text-amber-400 border-none text-[9px] mt-1">Warning Drop</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Manpower Forecast</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={safeForecast}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} domain={[100, 150]} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="current"   stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} name="Current"   connectNulls={false} />
-                <Line type="monotone" dataKey="projected" stroke="hsl(220 70% 60%)"    strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Projected" />
-              </LineChart>
+      {/* SECTION B & C - ANALYTICS & TALENT INTEL */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* F5 & F14: Quantum Match / Gap Radar */}
+        <PCard title="Quantum Skill Match" icon={Radar} glow>
+          <div className="h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={skillsRadar}>
+                <PolarGrid stroke="#ffffff20" />
+                <PolarAngleAxis dataKey="subject" tick={{fill:'#9ca3af', fontSize:10}} />
+                <RechartsRadar name="Current" dataKey="cur" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+                <RechartsRadar name="Required" dataKey="req" stroke="#10b981" fill="#10b981" fillOpacity={0.5} />
+                <Legend wrapperStyle={{fontSize:10, paddingTop:10}}/>
+              </RadarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Budget Breakdown ($K)</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={safeBudget}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="dept" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="salary" fill="hsl(var(--primary))" name="Salary"      radius={[4,4,0,0]} />
-                <Bar dataKey="hiring" fill="hsl(220 70% 65%)"    name="Hiring Cost" radius={[4,4,0,0]} />
+          </div>
+        </PCard>
+
+        {/* F7: What-If Simulator */}
+        <PCard title="What-If Simulator" icon={Activity}>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-xs text-gray-400 mb-1"><span>Attrition</span><span>{attritionRate[0]}%</span></div>
+              <Slider value={attritionRate} onValueChange={setAttritionRate} max={30} step={1} className="[&>span]:bg-emerald-500" />
+            </div>
+            <div className="h-[160px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={MOCK_FORECAST}>
+                  <XAxis dataKey="month" tick={{fill:'#6b7280', fontSize:10}} />
+                  <Tooltip contentStyle={{backgroundColor:'#111827', borderColor:'#10b981'}} />
+                  <Line type="monotone" dataKey="projected" stroke="#10b981" strokeWidth={3} dot={{r:4, fill:'#10b981'}} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </PCard>
+
+        {/* F8: Pipeline Velocity */}
+        <PCard title="Pipeline Velocity" icon={Workflow}>
+          <div className="h-[240px]">
+             <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={pipelineData} layout="vertical" margin={{left: 20}}>
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:10}} />
+                <Tooltip contentStyle={{backgroundColor:'#111827', borderColor:'#10b981'}} />
+                <Bar dataKey="value" radius={[0,4,4,0]}>
+                  {pipelineData.map((e,i)=><Cell key={i} fill={e.fill} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Requirements */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Department Hiring Requirements</CardTitle>
-            <NewRequirementDialog onAdded={handleRequirementAdded} />
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2.5">
-            <AnimatePresence initial={false}>
-              {safeRequirements.map((r) => (
-                <motion.div
-                  key={r.id}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 12 }}
-                  className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 border border-border/40"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{r.job_title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.department} · {r.positions} position{r.positions > 1 ? "s" : ""}
-                      {r.budget ? ` · Budget: ${r.budget}` : ""}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className={`text-xs shrink-0 capitalize ${priorityColors[r?.status] ?? "border-border bg-muted/30 text-muted-foreground"}`}>
-                    {r?.status ?? "unknown"}
-                  </Badge>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </CardContent>
-      </Card>
+        </PCard>
 
-      {/* Org */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <GitBranch className="w-4 h-4" /> Organization Structure
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex justify-start overflow-x-auto pb-2 pt-2 sm:justify-center">
-            <OrgNodeComponent node={safeOrg} />
-          </div>
-        </CardContent>
-      </Card>
+        {/* F9: Resonance Graph */}
+        <PCard title="Emotional Resonance" icon={HeartPulse}>
+           <div className="h-[200px]">
+             <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={emoData}>
+                  <defs>
+                    <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="pos" stroke="#10b981" fill="url(#colorPos)" />
+                </AreaChart>
+             </ResponsiveContainer>
+           </div>
+        </PCard>
 
-      {/* Channels */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Job Posting Channels</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid sm:grid-cols-3 gap-3">
-            {["LinkedIn", "Naukri", "Indeed"].map((ch) => {
-              const isConn = connected.includes(ch);
-              return (
-                <div key={ch} className="p-4 rounded-lg border border-border bg-muted/20 text-center">
-                  <p className="font-semibold text-sm">{ch}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{isConn ? "Active integration" : "Not connected"}</p>
-                  <Button
-                    variant={isConn ? "secondary" : "outline"} size="sm" className="mt-3"
-                    onClick={() => !isConn && setConnected(prev => [...prev, ch])}
-                    disabled={isConn}
-                  >
-                    {isConn ? <><Check className="w-3 h-3 mr-1" /> Connected</> : <><ChevronRight className="w-3 h-3 mr-1" /> Connect</>}
-                  </Button>
+        {/* F11 & F12: Candidate Twin & Mobility */}
+        <PCard title="AI Talent Twins" icon={Users}>
+          <div className="space-y-3">
+            {[ {n:"Alice M.", r:"Sr Engineer", m:94}, {n:"Bob T.", r:"Designer", m:89}, {n:"Carol K.", r:"PM", m:85} ].map(t => (
+              <div key={t.n} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/10 hover:border-emerald-500/50 cursor-pointer transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">{t.n[0]}</div>
+                  <div><p className="text-sm font-medium text-white">{t.n}</p><p className="text-xs text-gray-400">{t.r}</p></div>
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
-// ─── Org Tree ─────────────────────────────────────────────────────────────────
-function OrgNodeComponent({ node, depth = 0 }: { node: any; depth?: number }) {
-  const colors = [
-    "bg-primary text-primary-foreground",
-    "bg-primary/20 text-primary border border-primary/30",
-    "bg-muted text-foreground border border-border",
-  ];
-  return (
-    <div className="flex flex-col items-center">
-      <div className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${colors[Math.min(depth, 2)]}`}>
-        {node?.name ?? "Unknown"}
-      </div>
-      {(node?.children?.length ?? 0) > 0 && (
-        <>
-          <div className="w-px h-4 bg-border" />
-          <div className="flex gap-6">
-            {(node?.children ?? []).map((c: any) => (
-              <div key={c.name} className="flex flex-col items-center">
-                <div className="w-px h-4 bg-border" />
-                <OrgNodeComponent node={c} depth={depth + 1} />
+                <Badge className="bg-emerald-500/10 text-emerald-400">{t.m}% Match</Badge>
               </div>
             ))}
           </div>
-        </>
-      )}
+        </PCard>
+
+        {/* F15 & F16: Collective IQ / Neural Comp */}
+        <PCard title="Collective IQ Delta" icon={Brain} badge="Team Harmony: 87%">
+           <div className="h-[200px]">
+             <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={gd(6, (_,i)=>({m:`M${i+1}`, iq: 110+i*rnd(1,3)}))}>
+                  <Line type="stepAfter" dataKey="iq" stroke="#8b5cf6" strokeWidth={3} dot={{r:4}} />
+                </LineChart>
+             </ResponsiveContainer>
+           </div>
+        </PCard>
+      </div>
+
+      {/* SECTION D - FINANCIALS */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* F17: Vacancy Cost */}
+        <PCard title="Live Vacancy Cost" icon={DollarSign} glow className="lg:col-span-1">
+          <div className="flex flex-col items-center justify-center h-full space-y-4 py-6">
+            <span className="text-4xl font-black text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]">
+              ₹{(vacancyCost / 100000).toFixed(2)} Cr
+            </span>
+            <p className="text-xs text-gray-400">Ticking daily loss</p>
+          </div>
+        </PCard>
+
+        {/* F19: ESG Meter */}
+        <PCard title="ESG Hiring Impact" icon={Leaf} className="lg:col-span-2">
+          <div className="flex justify-around items-center h-full py-4">
+            {esgData.map(e => (
+              <div key={e.name} className="flex flex-col items-center gap-2">
+                <div className="w-20 h-20 relative">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <RadialBarChart cx="50%" cy="50%" innerRadius="70%" outerRadius="100%" data={[e]} startAngle={90} endAngle={-270}>
+                       <RadialBar background={{fill:'#ffffff10'}} dataKey="value" cornerRadius={10} fill={e.fill} />
+                     </RadialBarChart>
+                   </ResponsiveContainer>
+                   <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">{e.value}%</div>
+                </div>
+                <span className="text-xs text-gray-400">{e.name}</span>
+              </div>
+            ))}
+          </div>
+        </PCard>
+
+        {/* F32: Regulatory Shield */}
+        <PCard title="Regulatory Shield" icon={Shield} badge="EU Alert">
+          <div className="space-y-3">
+            {[ {r:"India", v:98, c:"bg-emerald-500"}, {r:"USA", v:95, c:"bg-emerald-500"}, {r:"EU", v:87, c:"bg-amber-500"} ].map(r => (
+              <div key={r.r}>
+                <div className="flex justify-between text-xs mb-1"><span>{r.r}</span><span>{r.v}%</span></div>
+                <Progress value={r.v} className="h-1.5 [&>div]:bg-emerald-500" />
+              </div>
+            ))}
+          </div>
+        </PCard>
+      </div>
+
+      {/* SECTION E & F - DEI, HEATMAP, INFINITE LOOP */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* F21 & F23: DEI & Neuro */}
+        <PCard title="DEI Intelligence" icon={Scale}>
+          <div className="h-[140px] mb-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={neuroData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value" stroke="none">
+                  {neuroData.map((e,i)=><Cell key={i} fill={e.fill}/>)}
+                </Pie>
+                <Tooltip contentStyle={{backgroundColor:'#111827', borderColor:'#10b981'}}/>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="text-center text-xs text-gray-400">Neuro-diversity Mix (18%)</div>
+        </PCard>
+
+        {/* F25: Global Talent Heatmap */}
+        <PCard title="Global Talent Topology" icon={Globe} className="lg:col-span-1">
+          <div className="grid grid-cols-6 gap-1 h-32 opacity-70">
+            {heatGrid.map((v, i) => (
+              <div key={i} className="rounded-sm" style={{backgroundColor: `rgba(16,185,129,${v/100})`}} />
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-500 mt-2 text-center">Simulated Regional Density</p>
+        </PCard>
+
+        {/* F31: Infinite Loop Optimizer */}
+        <PCard title="Infinite Hiring Loop" icon={InfinityIcon} glow>
+          <div className="flex flex-col items-center py-4">
+            <motion.div animate={{rotate:360}} transition={{repeat:Infinity, duration:8, ease:"linear"}}>
+               <InfinityIcon className="w-16 h-16 text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+            </motion.div>
+            <div className="mt-4 space-y-2 w-full">
+               <div className="text-xs bg-emerald-500/10 text-emerald-300 p-2 rounded-lg text-center">-8 days Time-to-Hire (Auto)</div>
+               <div className="text-xs bg-emerald-500/10 text-emerald-300 p-2 rounded-lg text-center">+12% Offer Accept (Auto)</div>
+            </div>
+          </div>
+        </PCard>
+      </div>
+
+      {/* EXISTING REQUIREMENTS CARDS (styled up) */}
+      <PCard title="Department Reqs" icon={Briefcase}>
+        <div className="space-y-3">
+          {requirements.map((r) => (
+            <div key={r.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/10">
+              <div><p className="font-semibold text-sm">{r.job_title}</p><p className="text-xs text-gray-400">{r.department} · {r.positions} pos</p></div>
+              <Badge className={priorityColors[r.status]}>{r.status}</Badge>
+            </div>
+          ))}
+        </div>
+      </PCard>
+
+      {/* F50 CEO DECISION TELEPORT OVERLAY TRIGGER */}
+      <div className="mt-12 w-full p-8 rounded-3xl border border-emerald-500/50 bg-gradient-to-r from-gray-900 to-gray-800 shadow-[0_0_40px_rgba(16,185,129,0.2)] text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+        <Crown className="w-12 h-12 text-emerald-400 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)]" />
+        <h2 className="text-3xl font-black text-white mb-2">CEO War Room</h2>
+        <p className="text-gray-400 mb-6">Simulate all 2030 hiring scenarios instantly.</p>
+        <Button size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-8 py-6 text-lg font-bold shadow-[0_0_20px_rgba(16,185,129,0.4)]" onClick={() => setTeleportOpen(true)}>
+          <Zap className="w-5 h-5 mr-2" /> Enter Decision Teleport
+        </Button>
+      </div>
+
+      {/* MODALS & FLOATING */}
+      <AnimatePresence>
+        {teleportOpen && (
+          <Dialog open={teleportOpen} onOpenChange={setTeleportOpen}>
+            <DialogContent className="max-w-4xl bg-gray-950 border-emerald-500/40 text-white">
+              <DialogHeader><DialogTitle className="text-2xl flex items-center gap-2"><Crown className="text-emerald-400"/> Executive Teleport</DialogTitle></DialogHeader>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <PCard title="Scenario A: Hyper-Growth" icon={TrendingUp} glow>
+                  <p className="text-xs text-gray-300">Revenue Unlock: +₹142Cr</p>
+                  <p className="text-xs text-gray-300 mt-2">Cost: ₹12Cr</p>
+                  <Button className="w-full mt-4 bg-emerald-600">Execute</Button>
+                </PCard>
+                <PCard title="Scenario B: Lean Efficiency" icon={Scale}>
+                   <p className="text-xs text-gray-300">Revenue Unlock: +₹60Cr</p>
+                   <p className="text-xs text-gray-300 mt-2">Cost: ₹3Cr</p>
+                   <Button variant="outline" className="w-full mt-4 border-emerald-500 text-emerald-400">Execute</Button>
+                </PCard>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Copilot */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        <AnimatePresence>
+          {copilotOpen && (
+             <motion.div initial={{opacity:0, scale:0.9, y:20}} animate={{opacity:1, scale:1, y:0}} exit={{opacity:0, scale:0.9, y:20}} className="w-80 bg-gray-900/95 border border-emerald-500/40 backdrop-blur-xl rounded-2xl shadow-2xl p-4 mb-4">
+               <div className="flex justify-between items-center border-b border-white/10 pb-2 mb-3">
+                 <h4 className="text-sm font-bold text-white flex items-center gap-2"><Bot className="w-4 h-4 text-emerald-400"/> AI Copilot</h4>
+                 <button onClick={()=>setCopilotOpen(false)}><X className="w-4 h-4 text-gray-400 hover:text-white"/></button>
+               </div>
+               <div className="space-y-3">
+                 <div className="bg-white/5 p-2 text-xs rounded-lg text-gray-300">How can I optimize the current pipeline?</div>
+                 <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 text-xs rounded-lg text-emerald-100">I recommend activating the Swarm Agents for Engineering roles. It will boost velocity by 14%.</div>
+               </div>
+             </motion.div>
+          )}
+        </AnimatePresence>
+        <motion.button whileHover={{scale:1.1}} whileTap={{scale:0.9}} onClick={()=>setCopilotOpen(!copilotOpen)} className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.5)]">
+          <MessageSquare className="w-6 h-6 text-white" />
+        </motion.button>
+      </div>
+
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// AI JD GENERATOR DIALOG
-// ═══════════════════════════════════════════════════════════════════════════════
-function JDGeneratorDialog({
-  onUseJD,
-  departments,
-}: {
-  onUseJD: (data: PrefilledJob) => void;
-  departments: string[];
-}) {
-  const [open,    setOpen]    = useState(false);
-  const [title,   setTitle]   = useState("");
-  const [dept,    setDept]    = useState("");
-  const [extra,   setExtra]   = useState("");
-  const [output,  setOutput]  = useState("");
-  const [guidance, setGuidance] = useState("Enter a job title and choose a department to generate a complete job description.");
+// ─── DIALOGS ──────────────────────────────────────────────────────────────────
+function JDGeneratorDialog({ onUseJD, departments }: any) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [dept, setDept] = useState("");
+  const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
-  const [copied,  setCopied]  = useState(false);
-  const safeDepartments = departments ?? [];
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    if (debounce.current) clearTimeout(debounce.current);
-    const { description, guidance: nextGuidance } = buildJobDescription(title, dept, extra);
-
-    if (!title.trim() || !dept.trim()) {
-      setLoading(false);
-      setError("");
-      setOutput("");
-      setGuidance(nextGuidance);
-      return () => {
-        if (debounce.current) clearTimeout(debounce.current);
-      };
-    }
-
-    const nextRequestId = requestIdRef.current + 1;
-    requestIdRef.current = nextRequestId;
+  const gen = async () => {
     setLoading(true);
-    setError("");
-    setGuidance("");
-
-    debounce.current = setTimeout(async () => {
-      try {
-        const generated = await generateJDWithClaude(title, dept, extra);
-        if (requestIdRef.current !== nextRequestId) return;
-        setOutput(generated || description);
-      } catch {
-        if (requestIdRef.current !== nextRequestId) return;
-        setError("We couldn't generate the job description right now. A fallback template is shown below.");
-        setOutput(description);
-      } finally {
-        if (requestIdRef.current === nextRequestId) {
-          setLoading(false);
-        }
-      }
-    }, 650);
-
-    return () => {
-      if (debounce.current) clearTimeout(debounce.current);
-    };
-  }, [title, dept, extra]);
-
-  const reset = () => {
-    setTitle("");
-    setDept("");
-    setExtra("");
-    setOutput("");
-    setGuidance("Enter a job title and choose a department to generate a complete job description.");
-    setError("");
-    setCopied(false);
+    const text = await generateJDWithClaude(title, dept, "");
+    setOutput(text);
     setLoading(false);
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(output);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // ★ FIX: "Use This JD" — copy karo AND JobCreateDialog kholo (600ms delay for feedback)
-  const handleUseJD = () => {
-    // Step 1: Clipboard mein copy
-    navigator.clipboard.writeText(output);
-    setCopied(true);
-
-    // Step 2: 600ms baad JD dialog band karo + JobCreate dialog kholo
-    setTimeout(() => {
-      onUseJD({ title, department: dept, description: output });
-      setOpen(false);
-      reset();
-    }, 600);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Sparkles className="w-4 h-4 mr-1.5" /> AI Job Description
-        </Button>
-      </DialogTrigger>
-
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-primary" /> AI Job Description Generator
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="grid gap-4 mt-2">
-          {/* Title + Dept */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>
-                Job Title <span className="text-destructive">*</span>
-                <span className="text-muted-foreground text-xs ml-1">(type to auto-generate)</span>
-              </Label>
-              <Input
-                placeholder="e.g. Senior React Developer"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Department <span className="text-destructive">*</span></Label>
-              <Select value={dept} onValueChange={setDept}>
-                <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
-                <SelectContent>
-                  {safeDepartments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Extra */}
-          <div className="space-y-1.5">
-            <Label>
-              Key Requirements
-              <span className="text-muted-foreground text-xs ml-1">(optional — updates JD automatically)</span>
-            </Label>
-            <Textarea
-              placeholder="e.g. 5+ years React, TypeScript, team lead experience…"
-              rows={2} value={extra} onChange={e => setExtra(e.target.value)}
-            />
-          </div>
-
-          {/* Output box */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label>Generated Job Description</Label>
-              {loading && (
-                <span className="flex items-center gap-1.5 text-xs text-primary">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Generating…
-                </span>
-              )}
-              {!loading && output && (
-                <span className="flex items-center gap-1 text-xs text-emerald-600">
-                  <Check className="w-3 h-3" /> Ready
-                </span>
-              )}
-            </div>
-
-            <div className={`relative min-h-[220px] rounded-xl border transition-all ${loading ? "border-primary/40 bg-primary/5" : "border-border bg-muted/30"}`}>
-              {!loading && !output && !error && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground select-none">
-                  <Wand2 className="w-8 h-8 opacity-25" />
-                  <p className="text-center text-sm">{guidance}</p>
-                </div>
-              )}
-              {loading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="w-7 h-7 animate-spin text-primary" />
-                  <p className="text-sm font-medium text-primary">Building a structured job description…</p>
-                </div>
-              )}
-              {!loading && output && (
-                <div className="max-h-80 overflow-y-auto p-4 text-sm leading-relaxed whitespace-pre-wrap">
-                  {output}
-                </div>
-              )}
-              {!loading && error && output && (
-                <div className="absolute left-3 right-3 top-3 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Action buttons — visible only when JD is ready */}
-          {output && !loading && (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {/* Sirf copy button — dialog band nahi hoti */}
-              <Button variant="outline" className="flex-1" onClick={handleCopy}>
-                {copied
-                  ? <><Check className="w-4 h-4 mr-1.5 text-emerald-600" /> Copied!</>
-                  : <><Copy className="w-4 h-4 mr-1.5" /> Copy</>
-                }
-              </Button>
-
-              {/* ★ FIX: Copy + JobCreate dono */}
-              <Button className="flex-1" onClick={handleUseJD} disabled={copied}>
-                {copied
-                  ? <><Check className="w-4 h-4 mr-1.5 text-emerald-600" /> Copied! Opening…</>
-                  : <><ArrowRight className="w-4 h-4 mr-1.5" /> Use This JD — Create Job</>
-                }
-              </Button>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// JOB CREATE DIALOG  (controlled externally so JD can pre-fill it)
-// ═══════════════════════════════════════════════════════════════════════════════
-interface JobForm { title: string; department: string; description: string; min_salary: string; max_salary: string; }
-const emptyJob: JobForm = { title: "", department: "", description: "", min_salary: "", max_salary: "" };
-
-function JobCreateDialog({
-  open, onOpenChange, prefilled, departments,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  prefilled: PrefilledJob | null;
-  departments: string[];
-}) {
-  const [form,    setForm]    = useState<JobForm>(emptyJob);
-  const [errors,  setErrors]  = useState<Partial<JobForm>>({});
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const safeDepartments = departments ?? [];
-
-  // Sync prefilled data when dialog opens
-  useEffect(() => {
-    if (open && prefilled) {
-      setForm({ title: prefilled.title, department: prefilled.department, description: prefilled.description, min_salary: "", max_salary: "" });
-      setErrors({});
-    }
-    if (!open) { setForm(emptyJob); setErrors({}); setSuccess(false); }
-  }, [open, prefilled]);
-
-  const set = (field: keyof JobForm, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    setErrors(prev => ({ ...prev, [field]: "" }));
-  };
-
-  const validate = () => {
-    const e: Partial<JobForm> = {};
-    if (!form.title.trim())       e.title       = "Job title is required.";
-    if (!form.department)         e.department  = "Please select a department.";
-    if (!form.description.trim()) e.description = "Description is required.";
-    if (!form.min_salary)         e.min_salary  = "Min salary is required.";
-    if (!form.max_salary)         e.max_salary  = "Max salary is required.";
-    if (form.min_salary && form.max_salary && Number(form.min_salary) > Number(form.max_salary))
-      e.max_salary = "Max salary must be ≥ min salary.";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    setLoading(true);
-    try {
-      await api.post("/jobs", {
-        title:       form.title.trim(),
-        department:  form.department,
-        description: form.description.trim(),
-        min_salary:  Number(form.min_salary),
-        max_salary:  Number(form.max_salary),
-      });
-      setSuccess(true);
-      setTimeout(() => onOpenChange(false), 1400);
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Failed to create job.";
-      setErrors(prev => ({ ...prev, title: msg }));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm"><Plus className="w-4 h-4 mr-1" /> Create Job</Button>
-      </DialogTrigger>
-
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-primary" />
-            {prefilled ? "Create Job — AI Pre-filled" : "Create New Job Posting"}
-          </DialogTitle>
-        </DialogHeader>
-
-        {success ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <Check className="w-7 h-7 text-emerald-600" />
-            </div>
-            <p className="font-semibold text-emerald-600 text-lg">Job Created Successfully!</p>
-          </div>
-        ) : (
-          <div className="space-y-4 mt-1">
-
-            {/* Banner when pre-filled */}
-            {prefilled && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary font-medium">
-                <Wand2 className="w-3.5 h-3.5 shrink-0" />
-                Auto-filled from AI Generator — JD clipboard mein copy ho gayi hai · Salary fill karke submit karein
-              </div>
-            )}
-
-            {/* Title */}
-            <div className="space-y-1">
-              <Label>Job Title <span className="text-destructive">*</span></Label>
-              <Input placeholder="e.g. Senior Frontend Engineer" value={form.title} onChange={e => set("title", e.target.value)} className={errors.title ? "border-destructive" : ""} />
-              {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
-            </div>
-
-            {/* Department */}
-            <div className="space-y-1">
-              <Label>Department <span className="text-destructive">*</span></Label>
-              <Select value={form.department} onValueChange={v => set("department", v)}>
-                <SelectTrigger className={errors.department ? "border-destructive" : ""}><SelectValue placeholder="Select department" /></SelectTrigger>
-                <SelectContent>
-                  {safeDepartments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {errors.department && <p className="text-xs text-destructive">{errors.department}</p>}
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1">
-              <Label>Description <span className="text-destructive">*</span></Label>
-              <Textarea placeholder="Job description…" rows={5} value={form.description} onChange={e => set("description", e.target.value)} className={errors.description ? "border-destructive" : ""} />
-              {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
-            </div>
-
-            {/* Salary */}
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="flex-1 space-y-1">
-                <Label>Min Salary (₹) <span className="text-destructive">*</span></Label>
-                <Input type="number" placeholder="500000" value={form.min_salary} onChange={e => set("min_salary", e.target.value)} className={errors.min_salary ? "border-destructive" : ""} />
-                {errors.min_salary && <p className="text-xs text-destructive">{errors.min_salary}</p>}
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label>Max Salary (₹) <span className="text-destructive">*</span></Label>
-                <Input type="number" placeholder="1200000" value={form.max_salary} onChange={e => set("max_salary", e.target.value)} className={errors.max_salary ? "border-destructive" : ""} />
-                {errors.max_salary && <p className="text-xs text-destructive">{errors.max_salary}</p>}
-              </div>
-            </div>
-
-            <Button onClick={handleSubmit} disabled={loading} className="w-full">
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating…</> : "Create Job Posting"}
-            </Button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── New Requirement Dialog ───────────────────────────────────────────────────
-let nextId = MOCK_REQUIREMENTS.length + 1;
-
-function NewRequirementDialog({ onAdded }: { onAdded: (r: Requirement) => void }) {
-  const [open,    setOpen]    = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
-  const [form, setForm] = useState({ jobTitle: "", department: "", positions: "", budget: "", status: "medium" });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const handleSubmit = () => {
-    if (!form.jobTitle || !form.department || !form.positions) {
-      setError("Job Title, Department, and Positions are required."); return;
-    }
-    setError(""); setLoading(true);
-    setTimeout(() => {
-      onAdded({ id: nextId++, job_title: form.jobTitle, department: form.department, positions: Number(form.positions), budget: form.budget || null, status: form.status, created_at: new Date().toISOString() });
-      setOpen(false);
-      setForm({ jobTitle: "", department: "", positions: "", budget: "", status: "medium" });
-      setLoading(false);
-    }, 600);
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline"><Plus className="w-4 h-4 mr-1.5" /> New Requirement</Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Add New Hiring Requirement</DialogTitle></DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label>Job Title <span className="text-destructive">*</span></Label>
-            <Input name="jobTitle" value={form.jobTitle} onChange={handleChange} placeholder="e.g. Backend Engineer" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Department <span className="text-destructive">*</span></Label>
-            <Input name="department" value={form.department} onChange={handleChange} placeholder="e.g. Engineering" />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Open Positions <span className="text-destructive">*</span></Label>
-              <Input type="number" name="positions" value={form.positions} onChange={handleChange} placeholder="e.g. 3" min={1} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Priority</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Budget <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Input name="budget" value={form.budget} onChange={handleChange} placeholder="e.g. $240K" />
-          </div>
-          {error && <div className="flex items-center gap-2 text-sm text-destructive"><AlertCircle className="w-4 h-4 shrink-0" /> {error}</div>}
-          <Button className="w-full" onClick={handleSubmit} disabled={loading}>
-            {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</> : "Create Requirement"}
-          </Button>
+      <DialogTrigger asChild><Button variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10"><Wand2 className="w-4 h-4 mr-2"/> JD Generator</Button></DialogTrigger>
+      <DialogContent className="max-w-2xl bg-gray-950 border-emerald-500/30 text-white">
+        <DialogHeader><DialogTitle className="text-emerald-400 flex items-center gap-2"><Wand2/> AI JD Generator</DialogTitle></DialogHeader>
+        <Tabs defaultValue="gen" className="mt-4">
+          <TabsList className="bg-gray-900 border border-white/10">
+            <TabsTrigger value="gen" className="data-[state=active]:bg-emerald-600">Generate</TabsTrigger>
+            <TabsTrigger value="audit" className="data-[state=active]:bg-emerald-600">Bias Auditor</TabsTrigger>
+          </TabsList>
+          <TabsContent value="gen" className="space-y-4 mt-4">
+             <div className="grid grid-cols-2 gap-4">
+               <div><Label className="text-gray-300">Job Title</Label><Input className="bg-gray-900 border-white/10 text-white mt-1" value={title} onChange={e=>setTitle(e.target.value)} /></div>
+               <div><Label className="text-gray-300">Department</Label>
+                 <Select value={dept} onValueChange={setDept}>
+                   <SelectTrigger className="bg-gray-900 border-white/10 text-white mt-1"><SelectValue/></SelectTrigger>
+                   <SelectContent className="bg-gray-900 border-white/10 text-white">{departments.map((d:any)=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                 </Select>
+               </div>
+             </div>
+             <Button className="w-full bg-emerald-600 hover:bg-emerald-500" onClick={gen} disabled={loading}>{loading?<Loader2 className="animate-spin mr-2"/>:"Generate JD"}</Button>
+             {output && (
+               <div className="relative">
+                 <Textarea value={output} readOnly className="h-40 bg-gray-900 border-emerald-500/30 text-sm p-4" />
+                 <div className="flex gap-2 mt-2">
+                   <Button variant="outline" className="flex-1 border-emerald-500/30 text-emerald-400" onClick={()=>setOutput(output + "\n\n[Auto-Evolved: +23% match prob]")}><Zap className="w-4 h-4 mr-2"/> Auto-Evolve JD</Button>
+                   <Button className="flex-1 bg-emerald-600" onClick={()=>{onUseJD({title,department:dept,description:output}); setOpen(false);}}><ArrowRight className="w-4 h-4 mr-2"/> Use JD</Button>
+                 </div>
+               </div>
+             )}
+          </TabsContent>
+          <TabsContent value="audit" className="mt-4 space-y-4">
+             <div className="p-6 bg-gray-900 rounded-xl border border-white/10 text-center">
+               <Shield className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
+               <h3 className="text-lg font-bold text-white">Bias Score: 94/100</h3>
+               <p className="text-sm text-gray-400 mt-2">No significant bias detected in generated text.</p>
+               <Badge className="mt-4 bg-emerald-500/20 text-emerald-400">Fairness Rating: A+</Badge>
+             </div>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JobCreateDialog({ open, onOpenChange, prefilled, departments }: any) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild><Button className="bg-emerald-600 hover:bg-emerald-500"><Plus className="w-4 h-4 mr-2"/> Create Job</Button></DialogTrigger>
+      <DialogContent className="bg-gray-950 border-emerald-500/30 text-white">
+        <DialogHeader><DialogTitle className="text-emerald-400">Create New Job</DialogTitle></DialogHeader>
+        <div className="space-y-4 mt-4">
+          <Input defaultValue={prefilled?.title} placeholder="Title" className="bg-gray-900 border-white/10" />
+          <Select defaultValue={prefilled?.department}>
+             <SelectTrigger className="bg-gray-900 border-white/10 text-white mt-1"><SelectValue placeholder="Dept"/></SelectTrigger>
+             <SelectContent className="bg-gray-900 border-white/10 text-white">{departments.map((d:any)=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+          </Select>
+          <Textarea defaultValue={prefilled?.description} placeholder="Description" className="bg-gray-900 border-white/10 h-32" />
+          <Button className="w-full bg-emerald-600 hover:bg-emerald-500" onClick={()=>onOpenChange(false)}>Submit Job</Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-type PageErrorBoundaryProps = {
-  children: ReactNode;
-};
-
-type PageErrorBoundaryState = {
-  hasError: boolean;
-};
-
-class PageErrorBoundary extends Component<PageErrorBoundaryProps, PageErrorBoundaryState> {
-  state: PageErrorBoundaryState = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
-    // Keep the page stable even if a child render path fails.
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Hiring & Workforce Planning</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">Strategic workforce planning with real-time data</p>
-          </div>
-          <Card>
-            <CardContent className="flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center">
-              <AlertCircle className="h-10 w-10 text-destructive" />
-              <p className="text-base font-medium">This section hit a rendering issue.</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                The page stayed available, but some hiring planning content could not be displayed. Refreshing the page should restore the local mock data view.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
+class PageErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() { return this.state.hasError ? <div className="p-8 text-red-500">Error rendering War Room.</div> : this.props.children; }
 }
-

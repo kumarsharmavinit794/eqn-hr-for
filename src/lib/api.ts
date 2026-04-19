@@ -1,3 +1,5 @@
+import { buildHrSupportReply, runHrIntelligence } from "./hr-intelligence";
+
 const K = "nexahr_frontend_only_db";
 const wait = (ms = 100) => new Promise((r) => setTimeout(r, ms));
 const now = () => new Date().toISOString();
@@ -177,10 +179,11 @@ async function handle(method, path, payload, config = {}) {
   if (path === "/offer-templates" && method === "post") { db.documents.offerTemplates.unshift({ id: Date.now(), ...payload }); save(db); return ok({ data: db.documents.offerTemplates[0] }); }
   if (/^\/id-card\/generate\/\d+$/.test(path) && method === "post") { db.documents.idCardsIssued += 1; save(db); return ok({ message: "ID card generated" }); }
   if (path === "/engagement") return ok({ data: db.engagement });
-  if (path === "/hr-chat" && method === "post") return ok({ reply: buildChatReply(String(payload.message || "")) });
+  if (path === "/ai/hr-brain" && method === "post") return ok({ data: runHrIntelligence(String(payload.message || ""), { ...db, currentEmail: localStorage.getItem("email") }) });
+  if (path === "/hr-chat" && method === "post") return ok({ reply: buildHrSupportReply(String(payload.message || ""), { ...db, currentEmail: localStorage.getItem("email") }) });
   if (path === "/performance") return ok({ data: db.performance });
   if (path === "/onboarding") return ok({ data: db.onboarding.hires });
-  if (path === "/onboarding/chatbot" && method === "post") return ok({ data: { reply: buildChatReply(String(payload.message || "")) } });
+  if (path === "/onboarding/chatbot" && method === "post") return ok({ data: { reply: buildHrSupportReply(String(payload.message || ""), { ...db, currentEmail: localStorage.getItem("email") }) } });
   if (path === "/onboarding/documents/upload" && method === "post") { db.documents.onboardingDocs = db.documents.onboardingDocs.map((d) => ({ ...d, status: d.name === payload.get("name") ? "uploaded" : d.status })); save(db); return ok({ message: "Document uploaded" }); }
   if (path === "/profile") return ok({ data: { user: currentUser(db) } });
   if (path === "/exit-cases") return ok({ data: db.exit.cases });

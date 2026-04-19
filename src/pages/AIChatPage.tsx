@@ -1,136 +1,210 @@
-import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, Bot, User, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bot, Loader2, Send, Sparkles, User } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import api from "@/lib/api";
+import { getHrBrainPromptSuggestions } from "@/lib/hr-intelligence";
 
 interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
+  summary?: string;
+  confidence?: number;
+  task?: string;
+  structuredJson?: unknown;
 }
 
-const suggestedPrompts = [
-  "Analyze top performer this quarter",
-  "Why was candidate #4 rejected?",
-  "Show attrition risk employees",
-  "Generate job description for React dev",
-  "Recommend training for skill gaps",
-];
-
-const fakeResponses: Record<string, string> = {
-  default: "I've analyzed the data across your HR system. Based on current metrics, here are my findings:\n\n**Key Insights:**\n- Employee engagement is trending upward at 87%\n- The Engineering department shows the highest retention rate\n- 3 employees are flagged for attrition risk based on behavioral patterns\n\nWould you like me to drill deeper into any of these areas?",
-};
+const suggestedPrompts = getHrBrainPromptSuggestions();
 
 export default function AIChatPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: 0, role: "assistant", content: "Hello! I'm your AI HR assistant powered by RAG. I can analyze employee data, review candidates, predict attrition, and answer any HR-related questions. How can I help you today?" },
+    {
+      id: 0,
+      role: "assistant",
+      content:
+        "The HR intelligence brain is online. Ask for hiring, promotion, warning, attrition, team formation, work mode, or a full HR intelligence report, and I will return a human summary plus structured JSON.",
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return;
-    const userMsg: Message = { id: Date.now(), role: "user", content: text };
-    setMessages(prev => [...prev, userMsg]);
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || loading) return;
+
+    const prompt = text.trim();
+    setMessages((prev) => [...prev, { id: Date.now(), role: "user", content: prompt }]);
     setInput("");
     setLoading(true);
 
-    setTimeout(() => {
-      const botMsg: Message = { id: Date.now() + 1, role: "assistant", content: fakeResponses.default };
-      setMessages(prev => [...prev, botMsg]);
+    try {
+      const response = await api.post("/ai/hr-brain", { message: prompt });
+      const payload = response.data?.data;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: payload?.summary || "The analysis completed, but no summary was returned.",
+          summary: payload?.summary,
+          confidence: payload?.confidence,
+          task: payload?.task,
+          structuredJson: payload?.structuredJson,
+        },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "I couldn't complete the HR intelligence run. Please try again in a moment.",
+        },
+      ]);
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[calc(100vh-7rem)]">
-      <div className="mb-4">
-        <h1 className="page-header">AI HR Assistant</h1>
-        <p className="page-subheader">RAG-powered insights across your entire HR ecosystem</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      <div className="rounded-3xl border border-border/60 bg-card/70 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Badge variant="outline" className="mb-3 border-primary/20 bg-primary/5 text-primary">
+              AI HR Brain
+            </Badge>
+            <h1 className="page-header">Structured HR Intelligence</h1>
+            <p className="page-subheader mt-1">
+              Run hiring, promotion, warning, attrition, team formation, work-mode, and complete workforce reports with JSON-first output.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">JSON + Summary</Badge>
+            <Badge variant="secondary">Confidence Scores</Badge>
+            <Badge variant="secondary">Actionable Recommendations</Badge>
+          </div>
+        </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-thin">
-        <AnimatePresence>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
-            >
-              {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shrink-0 mt-1">
-                  <Bot className="w-4 h-4 text-primary-foreground" />
-                </div>
-              )}
-              <div className={`max-w-[70%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "glass-card"
-              }`}>
-                {msg.content.split("\n").map((line, i) => (
-                  <p key={i} className={i > 0 ? "mt-2" : ""}>
-                    {line.replace(/\*\*(.*?)\*\*/g, "").includes("**") ? line : line.split("**").map((part, j) =>
-                      j % 2 === 1 ? <strong key={j}>{part}</strong> : part
-                    )}
-                  </p>
-                ))}
-              </div>
-              {msg.role === "user" && (
-                <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0 mt-1">
-                  <User className="w-4 h-4 text-secondary-foreground" />
-                </div>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {loading && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
-            <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center shrink-0">
-              <Bot className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <div className="glass-card rounded-xl px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">Processing with RAG...</span>
-            </div>
-          </motion.div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {/* Suggestions */}
       {messages.length <= 1 && (
-        <div className="flex flex-wrap gap-2 py-3">
-          {suggestedPrompts.map(prompt => (
+        <div className="flex flex-wrap gap-2">
+          {suggestedPrompts.map((prompt) => (
             <button
               key={prompt}
-              onClick={() => sendMessage(prompt)}
-              className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/50 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-foreground"
+              onClick={() => void sendMessage(prompt)}
+              className="rounded-full border border-border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
             >
-              <Sparkles className="w-3 h-3 inline mr-1" />{prompt}
+              <Sparkles className="mr-1 inline h-3 w-3" />
+              {prompt.split("\n")[0]}
             </button>
           ))}
         </div>
       )}
 
-      {/* Input */}
-      <div className="flex gap-2 pt-3 border-t border-border">
-        <Input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && sendMessage(input)}
-          placeholder="Ask anything about your HR data..."
-          className="flex-1"
-        />
-        <Button onClick={() => sendMessage(input)} disabled={!input.trim() || loading}>
-          <Send className="w-4 h-4" />
-        </Button>
+      <div className="space-y-4 rounded-3xl border border-border/60 bg-card/50 p-4 md:p-5">
+        <div className="max-h-[calc(100vh-22rem)] space-y-4 overflow-y-auto pr-2 scrollbar-thin">
+          <AnimatePresence>
+            {messages.map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}
+              >
+                {message.role === "assistant" && (
+                  <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-bg">
+                    <Bot className="h-4 w-4 text-primary-foreground" />
+                  </div>
+                )}
+
+                <div
+                  className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm ${
+                    message.role === "user" ? "bg-primary text-primary-foreground sm:max-w-[72%]" : "glass-card w-full"
+                  }`}
+                >
+                  <p className="leading-6">{message.content}</p>
+
+                  {message.role === "assistant" && (message.task || typeof message.confidence === "number") && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {message.task && (
+                        <Badge variant="outline" className="capitalize">
+                          {message.task.replace(/_/g, " ")}
+                        </Badge>
+                      )}
+                      {typeof message.confidence === "number" && (
+                        <Badge variant="outline">Confidence {message.confidence}%</Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {message.role === "assistant" && message.structuredJson && (
+                    <details className="mt-4 overflow-hidden rounded-2xl border border-border/60 bg-background/70" open>
+                      <summary className="cursor-pointer px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Structured JSON Output
+                      </summary>
+                      <div className="overflow-x-auto border-t border-border/60">
+                        <pre className="min-w-full whitespace-pre-wrap px-4 py-4 text-xs leading-6 text-foreground">
+                          {JSON.stringify(message.structuredJson, null, 2)}
+                        </pre>
+                      </div>
+                    </details>
+                  )}
+                </div>
+
+                {message.role === "user" && (
+                  <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary">
+                    <User className="h-4 w-4 text-secondary-foreground" />
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {loading && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-bg">
+                <Bot className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <div className="glass-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 inline h-4 w-4 animate-spin text-primary" />
+                Running HR intelligence analysis...
+              </div>
+            </motion.div>
+          )}
+
+          <div ref={endRef} />
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-background/80 p-3">
+          <Textarea
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                void sendMessage(input);
+              }
+            }}
+            rows={4}
+            placeholder="Ask for a hiring recommendation, promotion analysis, warning review, resignation risk scan, team formation plan, work mode recommendation, or a complete HR intelligence report..."
+            className="min-h-[120px] resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+          />
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">Use Ctrl+Enter to run the analysis.</p>
+            <Button onClick={() => void sendMessage(input)} disabled={!input.trim() || loading}>
+              <Send className="mr-2 h-4 w-4" />
+              Analyze
+            </Button>
+          </div>
+        </div>
       </div>
     </motion.div>
   );

@@ -71,7 +71,7 @@ const App = () => (
         <Toaster />
         <Sonner />
 
-      <BrowserRouter future={{ v7_startTransition: true }}>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         {/* 🔥 GLOBAL RESPONSIVE WRAPPER */}
 
           {/* 🔥 CENTER CONTAINER */}
