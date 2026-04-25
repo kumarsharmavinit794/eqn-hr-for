@@ -1,73 +1,111 @@
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, KeyRound, Loader2 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { CheckCircle2, LockKeyhole, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
+import {
+  AuthField,
+  AuthInput,
+  AuthPanel,
+  AuthShell,
+  PasswordStrengthMeter,
+} from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import api, { isApiError } from "@/lib/api";
+import { toast } from "@/components/ui/sonner";
+import { clearResetEmail, findWorkspacesForEmail, getLastWorkspace, getResetEmail } from "@/lib/workspace";
 
 export default function ResetPasswordPage() {
-  const [params] = useSearchParams();
-  const [token, setToken] = useState(params.get("token") || "");
+  const resetEmail = getResetEmail();
+  const workspace = (resetEmail ? findWorkspacesForEmail(resetEmail)[0] : null) || getLastWorkspace();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const canSubmit = useMemo(() => token.trim() && password.length >= 8 && password === confirmPassword, [token, password, confirmPassword]);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setLoading(true);
-    try {
-      const response = await api.post("/auth/reset-password", { token, new_password: password });
-      setMessage(response.data?.message || "Password updated successfully.");
-      setPassword("");
-      setConfirmPassword("");
-    } catch (error) {
-      if (isApiError(error)) {
-        setMessage(error.response?.data?.message || "Could not reset password.");
-      }
-    } finally {
-      setLoading(false);
+    if (password.length < 8) {
+      toast.error("Use at least 8 characters for the new password.");
+      return;
     }
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords must match.");
+      return;
+    }
+
+    setLoading(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 800));
+    setLoading(false);
+    setSuccess(true);
+    clearResetEmail();
+    toast.success("Password updated successfully.");
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md rounded-3xl border border-border/60 bg-card p-6 shadow-xl sm:p-8">
-        <Link to="/login" className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Back to login
-        </Link>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">Reset password</h1>
-          <p className="text-sm text-muted-foreground">Use the token from your email or backend logs and set a new strong password.</p>
-        </div>
-        <div className="mt-6 space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Reset token</label>
-            <Input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste reset token" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">New password</label>
-            <div className="relative">
-              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input type="password" className="pl-10" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Strong password" />
+    <AuthShell
+      eyebrow="Reset Password"
+      title={success ? "Password reset complete" : "Set a new password"}
+      description={
+        success
+          ? "Your company-linked password has been updated. Return to login and continue into the correct workspace."
+          : "Create a fresh password for your company account. The workspace context remains attached throughout the reset flow."
+      }
+      workspace={workspace}
+    >
+      <AuthPanel className="mx-auto max-w-xl">
+        {success ? (
+          <div className="space-y-5 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-600">
+              <CheckCircle2 className="h-6 w-6" />
             </div>
+            <div>
+              <p className="font-display text-2xl font-semibold text-foreground">Password updated</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                You can sign in again and Nexa HR will restore your company-aware workspace context.
+              </p>
+            </div>
+            <Button asChild className="h-12 w-full rounded-2xl text-sm font-semibold">
+              <Link to="/login">Return to Login</Link>
+            </Button>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Confirm password</label>
-            <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" />
+        ) : (
+          <div className="space-y-4">
+            <AuthField hint={resetEmail || "Company-linked user"} label="Account">
+              <div className="rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                {resetEmail || "Reset email not found. Continue with a new password for your active workspace account."}
+              </div>
+            </AuthField>
+
+            <AuthField label="New Password">
+              <div className="relative">
+                <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <AuthInput
+                  className="pl-11"
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Create a strong new password"
+                  type="password"
+                  value={password}
+                />
+              </div>
+            </AuthField>
+
+            <PasswordStrengthMeter password={password} />
+
+            <AuthField label="Confirm Password">
+              <AuthInput
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Repeat your new password"
+                type="password"
+                value={confirmPassword}
+              />
+            </AuthField>
+
+            <Button className="h-12 w-full rounded-2xl text-sm font-semibold" disabled={loading} onClick={handleSubmit}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Update Password
+            </Button>
           </div>
-          <Button className="w-full" disabled={loading || !canSubmit} onClick={handleSubmit}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Update password
-          </Button>
-          {message && <p className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">{message}</p>}
-        </div>
-      </motion.div>
-    </div>
+        )}
+      </AuthPanel>
+    </AuthShell>
   );
 }

@@ -257,6 +257,7 @@ type SafeDotProps = Omit<React.ComponentPropsWithoutRef<"circle">, "cx" | "cy" |
   r?: number | string | null;
   dataKey?: string | number;
   index?: number;
+  key?: string | number;
 };
 
 interface KpiCard {
@@ -285,25 +286,48 @@ const cockpitItemVariants = {
   },
 };
 
+const dashboardContentLayerClass = "dashboard-content-layer relative isolate z-10 pointer-events-auto";
+const dashboardDecorativeLayerClass = "dashboard-decorative-layer pointer-events-none absolute inset-0 z-0";
+const chartShellClass = "dashboard-chart-shell relative isolate z-10 pointer-events-auto";
 const panelClass =
-  "relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-2xl shadow-[0_30px_90px_-40px_rgba(0,0,0,0.85)]";
+  `${dashboardContentLayerClass} overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-2xl shadow-[0_30px_90px_-40px_rgba(0,0,0,0.85)]`;
 
-const subPanelClass = "rounded-[28px] border border-white/10 bg-black/20 backdrop-blur-xl";
+const subPanelClass = `${dashboardContentLayerClass} rounded-[28px] border border-white/10 bg-black/20 backdrop-blur-xl`;
+
+const toSafeCoordinate = (value: unknown): number => {
+  if (value === null || value === undefined || value === "") {
+    return Number.NaN;
+  }
+
+  return Number(value);
+};
+
+const toSafeRadius = (value: unknown): number => {
+  if (value === null || value === undefined || value === "") {
+    return 4;
+  }
+
+  return Number(value);
+};
 
 const SafeDot = ({
   cx,
   cy,
   r = 4,
+  dataKey: _dataKey,
+  index: _index,
+  key: _key,
   fill,
   stroke,
   strokeWidth,
   className,
   opacity,
   style,
+  ...restProps
 }: SafeDotProps) => {
-  const safeCx = typeof cx === "number" ? cx : Number(cx);
-  const safeCy = typeof cy === "number" ? cy : Number(cy);
-  const safeRadius = typeof r === "number" ? r : Number(r);
+  const safeCx = toSafeCoordinate(cx);
+  const safeCy = toSafeCoordinate(cy);
+  const safeRadius = toSafeRadius(r ?? 4);
 
   if (!Number.isFinite(safeCx) || !Number.isFinite(safeCy)) {
     return null;
@@ -311,6 +335,7 @@ const SafeDot = ({
 
   return (
     <circle
+      {...restProps}
       cx={safeCx}
       cy={safeCy}
       r={Number.isFinite(safeRadius) && safeRadius > 0 ? safeRadius : 4}
@@ -333,26 +358,47 @@ const renderSafeDot = (
   }
 
   const {
+    key: dotKey,
     index,
     dataKey,
-    key,
     name,
     width,
     height,
     value,
     payload,
     points,
-    ...restProps
+    cx,
+    cy,
+    r,
+    fill,
+    stroke,
+    strokeWidth,
+    className,
+    opacity,
+    style,
+    ...circleProps
   } = props as any;
+
+  const safeProps: SafeDotProps = {
+    ...circleProps,
+    className,
+    cx,
+    cy,
+    fill: fill ?? defaults.fill,
+    opacity,
+    r: r ?? defaults.r ?? 4,
+    stroke: stroke ?? defaults.stroke,
+    strokeWidth: strokeWidth ?? defaults.strokeWidth,
+    style,
+  };
+
+  const safeKey =
+    dotKey ?? `${String(dataKey ?? defaults.dataKey ?? "dot")}-${index ?? 0}`;
 
   return (
     <SafeDot
-      key={`${String(dataKey ?? defaults.dataKey ?? "dot")}-${index ?? 0}`}
-      {...restProps}
-      r={restProps.r ?? defaults.r ?? 4}
-      fill={restProps.fill ?? defaults.fill}
-      stroke={restProps.stroke ?? defaults.stroke}
-      strokeWidth={restProps.strokeWidth ?? defaults.strokeWidth}
+      key={safeKey}
+      {...safeProps}
     />
   );
 };
@@ -739,7 +785,7 @@ function GlassTooltip({ active, payload, label }: GlassTooltipProps) {
   }
 
   return (
-    <div className="min-w-[180px] rounded-3xl border border-white/15 bg-zinc-950/95 p-4 text-sm text-white shadow-2xl backdrop-blur-2xl">
+    <div className="pointer-events-none min-w-[180px] rounded-3xl border border-white/15 bg-zinc-950/95 p-4 text-sm text-white shadow-2xl backdrop-blur-2xl">
       {label ? <p className="mb-3 font-medium text-emerald-300">{label}</p> : null}
       <div className="space-y-2">
         {payload.map((entry, index) => (
@@ -782,7 +828,7 @@ function RingGauge({ value, color, label, suffix = "%" }: RingGaugeProps) {
           transition={{ duration: 1.2, ease: "easeOut" }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <div className="text-2xl font-semibold text-white">
           {value}
           {suffix}
@@ -953,12 +999,12 @@ export function AIHRCommandCockpit2027() {
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, amount: 0.15 }}
-        className="relative isolate w-full h-auto min-h-0 overflow-hidden rounded-[2rem] border border-emerald-400/15 border-red-500 bg-[#050b0b] p-4 sm:p-6 lg:p-8 shadow-[0_40px_140px_-60px_rgba(16,185,129,0.35)]"
+        className="dashboard-content-layer relative isolate w-full h-auto min-h-0 overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-[#050b0b] p-4 sm:p-6 lg:p-8 shadow-[0_40px_140px_-60px_rgba(16,185,129,0.35)]"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_32%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.16),transparent_28%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_center,rgba(14,165,233,0.10),transparent_36%)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/50 to-transparent" />
+        <div className={`${dashboardDecorativeLayerClass} bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_32%)]`} />
+        <div className={`${dashboardDecorativeLayerClass} bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.16),transparent_28%)]`} />
+        <div className={`${dashboardDecorativeLayerClass} bg-[radial-gradient(circle_at_bottom_center,rgba(14,165,233,0.10),transparent_36%)]`} />
+        <div className="dashboard-decorative-layer pointer-events-none absolute inset-x-0 top-0 z-0 h-px bg-gradient-to-r from-transparent via-emerald-300/50 to-transparent" />
 
         <motion.div variants={cockpitItemVariants} className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl">
@@ -991,7 +1037,7 @@ export function AIHRCommandCockpit2027() {
         </motion.div>
 
         <motion.div variants={cockpitItemVariants} className={`${panelClass} mt-4 p-5 sm:p-6`}>
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-white/[0.02] to-sky-500/10" />
+          <div className={`${dashboardDecorativeLayerClass} bg-gradient-to-r from-emerald-500/10 via-white/[0.02] to-sky-500/10`} />
           <div className="relative grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-300">
@@ -1059,7 +1105,7 @@ export function AIHRCommandCockpit2027() {
               whileHover={{ y: -5, scale: 1.01 }}
               className={`${panelClass} p-5`}
             >
-              <div className="absolute inset-0 opacity-70" style={{ background: `radial-gradient(circle at top right, ${card.color}22, transparent 45%)` }} />
+              <div className={`${dashboardDecorativeLayerClass} opacity-70`} style={{ background: `radial-gradient(circle at top right, ${card.color}22, transparent 45%)` }} />
               <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-xs uppercase tracking-[0.28em] text-zinc-500">{card.label}</div>
@@ -1185,7 +1231,7 @@ export function AIHRCommandCockpit2027() {
                   </div>
                 </div>
 
-                <div className="mt-4 w-full h-[320px]">
+                <div className={`${chartShellClass} mt-4 w-full h-[320px]`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={mobilityTrend}>
                       <CartesianGrid stroke="#ffffff10" vertical={false} />
@@ -1233,7 +1279,7 @@ export function AIHRCommandCockpit2027() {
               </div>
             </div>
 
-            <div className="mt-4 w-full h-[320px] rounded-[28px] border border-white/10 bg-black/20 p-4">
+            <div className={`${chartShellClass} mt-4 w-full h-[320px] rounded-[28px] border border-white/10 bg-black/20 p-4`}>
               <ResponsiveContainer width="100%" height="100%">
                 <FunnelChart>
                   <Tooltip content={<GlassTooltip />} />
@@ -1336,7 +1382,7 @@ export function AIHRCommandCockpit2027() {
                   </div>
                 </div>
 
-                <div className="mt-4 w-full h-[320px]">
+                <div className={`${chartShellClass} mt-4 w-full h-[320px]`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={simulationState.headcountProjection}>
                       <defs>
@@ -1557,7 +1603,7 @@ export function AIHRCommandCockpit2027() {
 
               <div className={`${subPanelClass} p-5`}>
                 <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Skills gap radar</div>
-                <div className="mt-4 w-full h-[320px]">
+                <div className={`${chartShellClass} mt-4 w-full h-[320px]`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={skillsRadar}>
                       <PolarGrid stroke="#ffffff18" />
@@ -1598,7 +1644,7 @@ export function AIHRCommandCockpit2027() {
 
             <div className="mt-5 grid gap-5 lg:grid-cols-[1.02fr_0.98fr]">
               <div className={`${subPanelClass} p-5`}>
-                <div className="w-full h-[320px]">
+                <div className={`${chartShellClass} w-full h-[320px]`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={wellbeingTrend}>
                       <defs>
@@ -1670,7 +1716,7 @@ export function AIHRCommandCockpit2027() {
             <div className="mt-5 grid gap-5 xl:grid-cols-2">
               <div className={`${subPanelClass} p-5`}>
                 <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Compensation benchmark vs market</div>
-                <div className="mt-4 w-full h-[320px]">
+                <div className={`${chartShellClass} mt-4 w-full h-[320px]`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={compensationBenchmark}>
                       <CartesianGrid stroke="#ffffff10" vertical={false} />
@@ -1687,7 +1733,7 @@ export function AIHRCommandCockpit2027() {
 
               <div className={`${subPanelClass} p-5`}>
                 <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Manager effectiveness radar</div>
-                <div className="mt-4 w-full h-[320px]">
+                <div className={`${chartShellClass} mt-4 w-full h-[320px]`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={managerEffectiveness}>
                       <PolarGrid stroke="#ffffff18" />
@@ -1925,7 +1971,7 @@ export function AIHRCommandCockpit2027() {
               </div>
             </div>
 
-            <div className="mt-4 w-full h-[320px] rounded-[28px] border border-white/10 bg-black/20 p-4">
+            <div className={`${chartShellClass} mt-4 w-full h-[320px] rounded-[28px] border border-white/10 bg-black/20 p-4`}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={diversityBelonging}>
                   <CartesianGrid stroke="#ffffff10" vertical={false} />
@@ -2003,7 +2049,7 @@ export function AIHRCommandCockpit2027() {
         </div>
       </motion.section>
 
-      <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
+      <div className="dashboard-shell-layer pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
         <AnimatePresence>
           {copilotOpen ? (
             <motion.div

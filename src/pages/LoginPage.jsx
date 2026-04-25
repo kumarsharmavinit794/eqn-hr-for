@@ -1,443 +1,387 @@
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, CheckCircle2, Loader2, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Chrome, Github, Loader2, Sparkles } from "lucide-react";
 
+import { AuthField, AuthInput, AuthPanel, AuthShell, OtpPinInput } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/sonner";
+import {
+  CompanyIdentityCard,
+  EmptyWorkspaceState,
+  WorkspaceSwitcherMenu,
+} from "@/components/workspace/WorkspacePrimitives";
 import { getDefaultRoute } from "@/lib/auth";
-import api, { isApiError } from "@/lib/api";
+import {
+  applyWorkspaceSession,
+  demoOtp,
+  findWorkspacesForEmail,
+  getEmailSuggestions,
+  getLastWorkspace,
+  getWorkspaceUpdateEventName,
+  hasRoleConfirmation,
+  setActiveWorkspace,
+} from "@/lib/workspace";
 
 const validateEmail = (email) => /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/.test(email);
-const validatePassword = (password) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password);
-const validatePhone = (phone) => /^[0-9]{10}$/.test(phone);
-const validatePincode = (pincode) => /^[0-9]{6}$/.test(pincode);
-
-const Field = ({ label, name, type = "text", placeholder, value, onChange, onBlur, error }) => (
-  <div className="space-y-1">
-    <label className="block text-xs font-medium text-foreground/70">{label}</label>
-    <input
-      name={name}
-      type={type}
-      value={value}
-      onChange={onChange}
-      onBlur={onBlur}
-      placeholder={placeholder}
-      className={`h-10 w-full rounded-lg border bg-background px-3 text-sm transition-all duration-200 focus:outline-none focus:ring-2 ${
-        error
-          ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-          : "border-border focus:border-primary/50 focus:ring-primary/20"
-      }`}
-    />
-    {error ? <p className="mt-1 text-xs text-red-500">{error}</p> : null}
-  </div>
-);
 
 export default function LoginPage() {
-  const [isSignup, setIsSignup] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [authStatusLoading, setAuthStatusLoading] = useState(true);
-  const [signupEnabled, setSignupEnabled] = useState(true);
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
+  const [loginMethod, setLoginMethod] = useState("password");
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const [lastWorkspace, setLastWorkspace] = useState(() => getLastWorkspace());
 
-  const [formData, setFormData] = useState({
-    fullName: "",
-    companyName: "",
-    companyEmail: "",
-    phone: "",
-    pincode: "",
-    email: "",
-    password: "",
-    role: "employee",
-  });
-
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
+  const matches = email ? findWorkspacesForEmail(email) : [];
+  const selectedWorkspace =
+    matches.find((workspace) => workspace.id === selectedWorkspaceId) || matches[0] || (!email ? lastWorkspace : null);
+  const workspaceEventName = getWorkspaceUpdateEventName();
 
   useEffect(() => {
-    let active = true;
+    const syncWorkspace = () => setLastWorkspace(getLastWorkspace());
+    window.addEventListener(workspaceEventName, syncWorkspace);
+    return () => window.removeEventListener(workspaceEventName, syncWorkspace);
+  }, [workspaceEventName]);
 
-    const loadAuthStatus = async () => {
-      try {
-        const response = await api.get("/auth/status");
-        if (active) {
-          setSignupEnabled(response.data?.data?.signup_enabled !== false);
-        }
-      } catch {
-        if (active) {
-          setSignupEnabled(true);
-        }
-      } finally {
-        if (active) {
-          setAuthStatusLoading(false);
-        }
+  useEffect(() => {
+    if (!matches.length) {
+      if (email) {
+        setSelectedWorkspaceId("");
       }
-    };
-
-    loadAuthStatus();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-  };
-
-  const handleRoleChange = (value) => {
-    setFormData((prev) => ({ ...prev, role: value }));
-  };
-
-  const validateField = (name, value) => {
-    let error = "";
-    switch (name) {
-      case "email":
-        if (!value) error = "Email is required";
-        else if (!validateEmail(value)) error = "Invalid email address";
-        break;
-      case "password":
-        if (!value) error = "Password is required";
-        else if (!validatePassword(value)) error = "Password must be 8+ chars with upper, lower, number, and special char";
-        break;
-      case "fullName":
-        if (isSignup && !value) error = "Full name is required";
-        break;
-      case "companyName":
-        if (isSignup && !value) error = "Company name is required";
-        break;
-      case "companyEmail":
-        if (isSignup && !value) error = "Company email is required";
-        else if (isSignup && !validateEmail(value)) error = "Invalid company email";
-        break;
-      case "phone":
-        if (isSignup && !value) error = "Phone number is required";
-        else if (isSignup && !validatePhone(value)) error = "Phone must be 10 digits";
-        break;
-      case "pincode":
-        if (isSignup && !value) error = "Pincode is required";
-        else if (isSignup && !validatePincode(value)) error = "Pincode must be 6 digits";
-        break;
-      default:
-        break;
-    }
-    setErrors((prev) => ({ ...prev, [name]: error }));
-    return error === "";
-  };
-
-  const handleBlur = (event) => {
-    const { name } = event.target;
-    setTouched((prev) => ({ ...prev, [name]: true }));
-    validateField(name, formData[name]);
-  };
-
-  const validateForm = () => {
-    const fieldsToValidate = isSignup
-      ? ["fullName", "companyName", "companyEmail", "phone", "pincode", "email", "password"]
-      : ["email", "password"];
-
-    const nextErrors = {};
-    let isValid = true;
-
-    fieldsToValidate.forEach((field) => {
-      const value = formData[field];
-      let error = "";
-      if (!value) {
-        error = `${field.replace(/([A-Z])/g, " $1").toLowerCase()} is required`;
-      } else if (field === "email" && !validateEmail(value)) {
-        error = "Invalid email address";
-      } else if (field === "password" && !validatePassword(value)) {
-        error = "Password must be 8+ chars with upper, lower, number, and special char";
-      } else if (field === "companyEmail" && !validateEmail(value)) {
-        error = "Invalid company email";
-      } else if (field === "phone" && !validatePhone(value)) {
-        error = "Phone must be 10 digits";
-      } else if (field === "pincode" && !validatePincode(value)) {
-        error = "Pincode must be 6 digits";
-      }
-
-      if (error) {
-        isValid = false;
-        nextErrors[field] = error;
-      }
-    });
-
-    const allTouched = {};
-    fieldsToValidate.forEach((field) => {
-      allTouched[field] = true;
-    });
-
-    setErrors(nextErrors);
-    setTouched((prev) => ({ ...prev, ...allTouched }));
-    return isValid;
-  };
-
-  const resetForm = () => {
-    setFormData({
-      fullName: "",
-      companyName: "",
-      companyEmail: "",
-      phone: "",
-      pincode: "",
-      email: "",
-      password: "",
-      role: "employee",
-    });
-    setErrors({});
-    setTouched({});
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      toast.error("Please fix the highlighted fields.");
       return;
     }
 
-      setLoading(true);
-    try {
-      if (isSignup) {
-        const response = await api.post("/auth/signup", {
-          fullName: formData.fullName.trim(),
-          companyName: formData.companyName.trim(),
-          companyEmail: formData.companyEmail.trim(),
-          phone: formData.phone.trim(),
-          pincode: formData.pincode.trim(),
-          email: formData.email.trim().toLowerCase(),
-          password: formData.password,
-          role: formData.role,
-        });
-
-        toast.success(response.data?.message || "Account created successfully");
-        resetForm();
-        setIsSignup(false);
-        setTimeout(() => navigate("/login", { replace: true }), 500);
-      } else {
-        const response = await api.post("/auth/login", {
-          email: formData.email.trim().toLowerCase(),
-          password: formData.password,
-        });
-
-        const payload = response.data?.data || response.data;
-        const accessToken = payload?.access_token || payload?.token;
-        if (accessToken) {
-          localStorage.setItem("token", accessToken);
-          localStorage.setItem("refresh_token", payload?.refresh_token || "");
-          localStorage.setItem("email", payload?.email || formData.email);
-          localStorage.setItem("name", payload?.name || payload?.fullName || "");
-          const role = payload?.role || "employee";
-          localStorage.setItem("role", role);
-          toast.success("Login successful! Redirecting...");
-          setTimeout(() => navigate(getDefaultRoute(role)), 800);
-        } else {
-          toast.error("Invalid credentials");
-        }
-      }
-    } catch (error) {
-      const message = isApiError(error)
-        ? error.response?.data?.message || error.response?.data?.detail || "Something went wrong"
-        : "Something went wrong";
-      toast.error(message);
-    } finally {
-      setLoading(false);
+    if (!matches.some((workspace) => workspace.id === selectedWorkspaceId)) {
+      const preferredWorkspace = matches.find((workspace) => workspace.id === lastWorkspace?.id) || matches[0];
+      setSelectedWorkspaceId(preferredWorkspace.id);
     }
+  }, [email, lastWorkspace?.id, matches, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!resendIn) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendIn((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendIn]);
+
+  const handleContinue = async () => {
+    if (!validateEmail(email)) {
+      toast.error("Enter your company-linked email to continue.");
+      return;
+    }
+
+    if (!selectedWorkspace) {
+      toast.error("We could not find a company workspace for that email.");
+      return;
+    }
+
+    if (loginMethod === "password" && !password.trim()) {
+      toast.error("Enter your password to continue.");
+      return;
+    }
+
+    if (loginMethod === "otp" && !otpRequested) {
+      setOtpRequested(true);
+      setResendIn(30);
+      toast.success(`Email OTP sent. Use demo code ${demoOtp}.`);
+      return;
+    }
+
+    if (loginMethod === "otp" && otp !== demoOtp) {
+      toast.error("Use the six-digit demo OTP shown on screen.");
+      return;
+    }
+
+    setLoading(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 850));
+    setActiveWorkspace(selectedWorkspace);
+    applyWorkspaceSession(selectedWorkspace, rememberMe);
+    setLoading(false);
+
+    if (selectedWorkspace.role !== "admin" && !hasRoleConfirmation(selectedWorkspace.id)) {
+      toast.success(`Workspace ready for ${selectedWorkspace.companyName}.`);
+      navigate("/role-confirmation");
+      return;
+    }
+
+    toast.success(`Welcome back to ${selectedWorkspace.companyName}.`);
+    navigate(getDefaultRoute(selectedWorkspace.role));
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-  };
+  const companyAwareLabel =
+    matches.length > 1
+      ? `You have access to ${matches.length} companies. Switch the active workspace before continuing.`
+      : matches.length === 1
+        ? `You are logging into ${matches[0].companyName}.`
+        : email
+          ? "We will detect your company workspace as soon as your email matches an invited tenant."
+          : "Enter your company email and Nexa HR will identify the workspace automatically.";
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      <motion.div
-        initial={{ opacity: 0, x: -30 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.55, ease: "easeOut" }}
-        className="relative hidden flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-primary/20 via-primary/8 to-background px-6 md:flex md:w-1/2 lg:w-3/5 lg:px-16"
-      >
-        <div className="pointer-events-none absolute -left-32 -top-32 h-[480px] w-[480px] rounded-full bg-primary/10 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-primary/6 blur-2xl" />
-
-        <div className="relative z-10 max-w-sm text-center">
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              background: "linear-gradient(135deg, #0d9488, #059669)",
-              boxShadow: "0 8px 24px rgba(13,148,136,0.35)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 20px",
-            }}
-          >
-            <Sparkles style={{ width: 26, height: 26, color: "#fff" }} />
-          </div>
-          <h1 className="bg-gradient-to-br from-primary to-primary/40 bg-clip-text text-5xl font-black tracking-tight text-transparent">
-            NexaHR
-          </h1>
-          <p className="mt-2 text-lg font-medium text-foreground/60">AI-Powered HR Management</p>
-          <p className="mx-auto mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-            Streamline your HR operations with intelligent automation and real-time insights.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-2">
-            {["Payroll", "Attendance", "Recruiting", "Analytics"].map((feature) => (
-              <span key={feature} className="rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-xs font-medium text-primary">
-                {feature}
-              </span>
-            ))}
-          </div>
-          <div className="mx-auto mt-10 h-px w-20 rounded-full bg-primary/25" />
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, x: 30 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.55, ease: "easeOut", delay: 0.08 }}
-        className="flex w-full items-center justify-center overflow-y-auto bg-background px-4 py-8 sm:px-6 sm:py-10 md:w-1/2 lg:w-2/5"
-      >
-        <div className="w-full max-w-[360px]">
-          <div className="space-y-4 rounded-2xl border border-border/50 bg-card p-6 shadow-sm">
-            <div className="mb-1 flex flex-col items-center gap-2 md:hidden">
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  background: "linear-gradient(135deg, #0d9488, #059669)",
-                  boxShadow: "0 4px 14px rgba(13,148,136,0.3)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Sparkles style={{ width: 20, height: 20, color: "#fff" }} />
+    <AuthShell
+      eyebrow="Workspace Login"
+      title="Sign in to your company workspace"
+      description="Every Nexa HR user signs into a company-owned tenant. Your email helps us identify the right workspace, preserve company branding, and route you into the correct role experience."
+      workspace={selectedWorkspace}
+    >
+      <div className="space-y-5">
+        <div className="grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
+          <AuthPanel>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-display text-lg font-semibold text-foreground">Work email first</p>
+                <p className="mt-1 text-sm text-muted-foreground">{companyAwareLabel}</p>
               </div>
-              <span className="text-base font-bold tracking-tight">NexaHR</span>
+              <div className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                Smart company match
+              </div>
             </div>
 
-            <motion.div variants={itemVariants}>
-              <h2 className="text-lg font-semibold tracking-tight">
-                {isSignup ? "Create your account" : "Sign in to NexaHR"}
-              </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {isSignup ? "Create the first admin account or request access from your admin" : "Enter your credentials to continue"}
-              </p>
-              {isSignup && !authStatusLoading && !signupEnabled ? (
-                <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  Signup is disabled. Please contact admin.
-                </p>
-              ) : null}
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 w-full gap-1.5 text-xs"
-                onClick={() => {
-                  const params = new URLSearchParams({
-                    token: "mock-oauth-token",
-                    name: "Demo Employee",
-                    email: "employee@nexahr.com",
-                    role: "employee",
-                  });
-                  window.location.href = `/oauth-success?${params.toString()}`;
-                }}
-              >
-                <Chrome className="h-3.5 w-3.5" /> Google
-              </Button>
-              <Button variant="outline" size="sm" className="h-10 w-full gap-1.5 text-xs" disabled>
-                <Github className="h-3.5 w-3.5" /> GitHub
-              </Button>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="relative">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-              <div className="relative flex justify-center"><span className="bg-card px-2.5 text-[11px] text-muted-foreground">or continue with email</span></div>
-            </motion.div>
-
-            <motion.div variants={itemVariants} className="space-y-3">
-              <AnimatePresence>
-                {isSignup && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="space-y-3 overflow-hidden"
-                  >
-                    <Field label="Full Name" name="fullName" placeholder="John Doe" value={formData.fullName} onChange={handleChange} onBlur={handleBlur} error={touched.fullName ? errors.fullName : ""} />
-                    <Field label="Company Name" name="companyName" placeholder="ABC Pvt Ltd" value={formData.companyName} onChange={handleChange} onBlur={handleBlur} error={touched.companyName ? errors.companyName : ""} />
-                    <Field label="Company Email" name="companyEmail" type="email" placeholder="hr@company.com" value={formData.companyEmail} onChange={handleChange} onBlur={handleBlur} error={touched.companyEmail ? errors.companyEmail : ""} />
-                    <Field label="Phone Number" name="phone" type="tel" placeholder="9876543210" value={formData.phone} onChange={handleChange} onBlur={handleBlur} error={touched.phone ? errors.phone : ""} />
-                    <Field label="Pincode" name="pincode" type="number" placeholder="302001" value={formData.pincode} onChange={handleChange} onBlur={handleBlur} error={touched.pincode ? errors.pincode : ""} />
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-foreground/70">Role</label>
-                      <Select value={formData.role} onValueChange={handleRoleChange}>
-                        <SelectTrigger className="h-10 text-sm">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="employee">Employee</SelectItem>
-                          <SelectItem value="hr">HR</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <p className="rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
-                      The first account is created as Admin automatically. In development mode, public signups can join as Employee or HR.
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <Field label="Email" name="email" type="email" placeholder="john@company.com" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={touched.email ? errors.email : ""} />
-              <Field label="Password" name="password" type="password" placeholder="Strong password" value={formData.password} onChange={handleChange} onBlur={handleBlur} error={touched.password ? errors.password : ""} />
-
-              <Button className="h-10 w-full text-sm" onClick={handleSubmit} disabled={loading || (isSignup && !signupEnabled)}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isSignup ? "Create Account" : "Sign In"}
-              </Button>
-
-              {!isSignup && (
-                <div className="flex justify-end">
-                  <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
-                    Forgot password?
-                  </Link>
-                </div>
-              )}
-            </motion.div>
-
-            <motion.p variants={itemVariants} className="text-center text-xs text-muted-foreground">
-              {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
-              {authStatusLoading || signupEnabled || isSignup ? (
-                <button
-                  onClick={() => {
-                    if (!isSignup && !signupEnabled) {
-                      toast.error("Signup disabled. Please contact admin");
-                      return;
-                    }
-                    setIsSignup(!isSignup);
-                    resetForm();
+            <div className="mt-5 space-y-4">
+              <AuthField label="Email" hint="Company aware">
+                <AuthInput
+                  autoComplete="email"
+                  list="workspace-email-suggestions"
+                  onChange={(event) => {
+                    setEmail(event.target.value.trim().toLowerCase());
+                    setOtp("");
+                    setOtpRequested(false);
                   }}
-                  className="font-medium text-primary transition-all hover:underline underline-offset-2"
+                  placeholder="you@company.com"
+                  value={email}
+                />
+                <datalist id="workspace-email-suggestions">
+                  {getEmailSuggestions().map((suggestion) => (
+                    <option key={suggestion} value={suggestion} />
+                  ))}
+                </datalist>
+              </AuthField>
+
+              {matches.length > 1 && selectedWorkspace ? (
+                <div className="rounded-[24px] border border-border/70 bg-background/50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Switch Workspace</p>
+                      <p className="text-xs text-muted-foreground">ChatGPT-style tenant switcher for shared users</p>
+                    </div>
+                    <WorkspaceSwitcherMenu
+                      activeWorkspace={selectedWorkspace}
+                      onSelect={(workspace) => setSelectedWorkspaceId(workspace.id)}
+                      workspaces={matches}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {matches.length === 1 && selectedWorkspace ? (
+                <CompanyIdentityCard compact workspace={selectedWorkspace} />
+              ) : null}
+
+              {!matches.length && email && validateEmail(email) ? <EmptyWorkspaceState /> : null}
+
+              {!email && lastWorkspace ? (
+                <div className="rounded-[24px] border border-border/70 bg-background/50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Last logged-in company</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Resume the previous workspace without re-selecting it.
+                      </p>
+                    </div>
+                    <Button
+                      className="rounded-xl"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEmail(lastWorkspace.userEmail);
+                        setSelectedWorkspaceId(lastWorkspace.id);
+                      }}
+                    >
+                      Use recent
+                    </Button>
+                  </div>
+                  <CompanyIdentityCard className="mt-4" compact workspace={lastWorkspace} />
+                </div>
+              ) : null}
+            </div>
+          </AuthPanel>
+
+          <AuthPanel className="flex flex-col justify-between">
+            <div>
+              <p className="font-display text-lg font-semibold text-foreground">Login method</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use your password or switch to email OTP for fast, company-aware access.
+              </p>
+
+              <div className="mt-5 grid grid-cols-2 gap-2 rounded-[22px] border border-border/70 bg-background/40 p-1">
+                <button
+                  className={`rounded-[18px] px-4 py-3 text-sm font-medium transition-all ${
+                    loginMethod === "password"
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setLoginMethod("password");
+                    setOtpRequested(false);
+                    setOtp("");
+                  }}
+                  type="button"
                 >
-                  {isSignup ? "Sign in" : "Sign up"}
+                  Password
                 </button>
-              ) : (
-                <span className="font-medium text-foreground/60">Signup is disabled. Please contact admin.</span>
-              )}
-            </motion.p>
-          </div>
+                <button
+                  className={`rounded-[18px] px-4 py-3 text-sm font-medium transition-all ${
+                    loginMethod === "otp" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setLoginMethod("otp");
+                    setPassword("");
+                  }}
+                  type="button"
+                >
+                  Email OTP
+                </button>
+              </div>
+
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={loginMethod === "password" ? "password" : otpRequested ? "otp-entry" : "otp-send"}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-5 space-y-4"
+                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.22 }}
+                >
+                  {loginMethod === "password" ? (
+                    <>
+                      <AuthField label="Password">
+                        <AuthInput
+                          autoComplete="current-password"
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="Enter your password"
+                          type="password"
+                          value={password}
+                        />
+                      </AuthField>
+
+                      <label className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3">
+                        <Checkbox checked={rememberMe} onCheckedChange={(checked) => setRememberMe(Boolean(checked))} />
+                        <span className="text-sm text-muted-foreground">Remember me for a persistent session</span>
+                      </label>
+                    </>
+                  ) : otpRequested ? (
+                    <>
+                      <AuthField label="Email OTP" hint={`Demo code ${demoOtp}`}>
+                        <OtpPinInput onChange={setOtp} value={otp} />
+                      </AuthField>
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-primary" />
+                          <span>OTP sent to {email}</span>
+                        </div>
+                        <button
+                          className="font-medium text-primary disabled:text-muted-foreground"
+                          disabled={resendIn > 0}
+                          onClick={() => {
+                            setResendIn(30);
+                            setOtp("");
+                            toast.success(`Fresh OTP sent. Use ${demoOtp}.`);
+                          }}
+                          type="button"
+                        >
+                          {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-[24px] border border-dashed border-border/70 bg-background/40 p-5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                          <Sparkles className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Login via OTP</p>
+                          <p className="text-xs text-muted-foreground">We will send a six-digit email code to your workspace identity.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <Button className="h-12 w-full rounded-2xl text-sm font-semibold" disabled={loading} onClick={handleContinue}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {loginMethod === "otp" ? (otpRequested ? "Verify OTP & Continue" : "Send Email OTP") : "Continue"}
+                {!loading ? <ArrowRight className="h-4 w-4" /> : null}
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border/70" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-card px-3 text-xs uppercase tracking-[0.22em] text-muted-foreground">Or</span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button asChild className="h-12 rounded-2xl" variant="outline">
+                  <Link to="/signup">Create Company Workspace</Link>
+                </Button>
+                <Button asChild className="h-12 rounded-2xl" variant="ghost">
+                  <Link to="/forgot-password">Forgot Password</Link>
+                </Button>
+              </div>
+            </div>
+          </AuthPanel>
         </div>
-      </motion.div>
-    </div>
+
+        <div className="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
+          <AuthPanel>
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Why company-first?</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Company identity stays visible throughout authentication so document templates, payroll artifacts, and
+                  offer letters always inherit the right branding.
+                </p>
+              </div>
+            </div>
+          </AuthPanel>
+
+          <AuthPanel>
+            <div className="flex flex-wrap items-center gap-2">
+              {["Persistent login", "Workspace switching", "Role-aware routing", "Branding memory"].map((item) => (
+                <span key={item} className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+                  {item}
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+              Try <span className="font-medium text-foreground">aarav@nexahr.ai</span> for a single workspace or{" "}
+              <span className="font-medium text-foreground">riya@sharedworkspace.com</span> for multi-company switching.
+            </div>
+          </AuthPanel>
+        </div>
+      </div>
+    </AuthShell>
   );
 }

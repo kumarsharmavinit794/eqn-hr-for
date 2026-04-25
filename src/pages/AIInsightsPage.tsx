@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import {
   FileSearch, Wand2, Calendar, UserPlus, ScanFace,
   CalendarOff, Calculator, MessageCircle, Heart,
-  TrendingDown, BookOpen, Shield, DoorOpen
+  TrendingDown, BookOpen, Shield, DoorOpen, Video
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,6 +10,7 @@ const features = [
   { icon: FileSearch, label: "Resume ATS Scoring", desc: "AI-powered applicant tracking score for every resume", path: "/ai/resume-ats" },
   { icon: TrendingDown, label: "Candidate Ranking", desc: "Auto-rank candidates based on role compatibility", path: "/ai/candidate-ranking" },
   { icon: Wand2, label: "JD Auto-Generator", desc: "Generate job descriptions from minimal input", path: "/ai/jd-generator" },
+  { icon: Video, label: "AI Interview Platform", desc: "Adaptive mock interviews with scoring and a final report", path: "/ai/interview-platform" },
   { icon: Calendar, label: "AI Interview Scheduling", desc: "Smart scheduling based on availability patterns", path: "/ai/interview" },
   { icon: UserPlus, label: "Onboarding Automation", desc: "Automated workflows for new employee setup", path: "/ai/onboarding" },
   { icon: ScanFace, label: "OCR Document Verification", desc: "Instant document scanning and validation", path: "/ai/ocr" },

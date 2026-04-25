@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -143,6 +143,9 @@
   .mono-text {
     font-family: 'JetBrains Mono', monospace;
   }
+  .font-display {
+    font-family: 'Poppins', 'Inter', system-ui, sans-serif;
+  }
 }
 
 @layer utilities {
@@ -153,6 +156,58 @@
   .animate-shimmer {
     animation: shimmer 2s linear infinite;
     background-size: 200% 100%;
+  }
+  [data-interaction-debug="true"] .dashboard-shell-layer {
+    box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.9);
+    background-image: linear-gradient(rgba(59, 130, 246, 0.04), rgba(59, 130, 246, 0.04));
+  }
+  [data-interaction-debug="true"] .dashboard-content-layer {
+    box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.85);
+    background-image: linear-gradient(rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.05));
+  }
+  [data-interaction-debug="true"] .dashboard-chart-shell {
+    box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.85);
+    background-image: linear-gradient(rgba(34, 197, 94, 0.04), rgba(34, 197, 94, 0.04));
+  }
+  [data-interaction-debug="true"] .dashboard-decorative-layer {
+    outline: 3px solid rgba(250, 204, 21, 0.9);
+    background-color: rgba(250, 204, 21, 0.08) !important;
+  }
+  [data-interaction-debug="true"] .dashboard-shell-layer::before,
+  [data-interaction-debug="true"] .dashboard-content-layer::before,
+  [data-interaction-debug="true"] .dashboard-chart-shell::before,
+  [data-interaction-debug="true"] .dashboard-decorative-layer::before {
+    position: absolute;
+    left: 0.5rem;
+    top: 0.5rem;
+    z-index: 999;
+    border-radius: 9999px;
+    padding: 0.15rem 0.45rem;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    pointer-events: none;
+    text-transform: uppercase;
+  }
+  [data-interaction-debug="true"] .dashboard-shell-layer::before {
+    content: "shell z:auto";
+    background: rgba(59, 130, 246, 0.92);
+    color: white;
+  }
+  [data-interaction-debug="true"] .dashboard-content-layer::before {
+    content: "content z:10";
+    background: rgba(239, 68, 68, 0.92);
+    color: white;
+  }
+  [data-interaction-debug="true"] .dashboard-chart-shell::before {
+    content: "chart z:10";
+    background: rgba(34, 197, 94, 0.92);
+    color: white;
+  }
+  [data-interaction-debug="true"] .dashboard-decorative-layer::before {
+    content: "decorative z:0";
+    background: rgba(250, 204, 21, 0.95);
+    color: black;
   }
 }
 

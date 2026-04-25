@@ -898,7 +898,7 @@ function OCRVerification() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.fileName}</p>
-                            <p className="text-xs text-slate-500">{item.type} • {item.uploadedAt}</p>
+                            <p className="text-xs text-slate-500">{item.type} ï¿½ {item.uploadedAt}</p>
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">

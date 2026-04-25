@@ -112,7 +112,7 @@ function HiringPlanningPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between relative z-10">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
-            Hiring War Room <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">2030 Edition</Badge>
+            Hiring War Room <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50"></Badge>
           </h1>
           <p className="text-sm text-gray-400 mt-1">Strategic AI workforce intelligence dashboard</p>
         </div>
@@ -542,3 +542,4 @@ class PageErrorBoundary extends Component<{children: ReactNode}, {hasError: bool
   static getDerivedStateFromError() { return { hasError: true }; }
   render() { return this.state.hasError ? <div className="p-8 text-red-500">Error rendering War Room.</div> : this.props.children; }
 }
+

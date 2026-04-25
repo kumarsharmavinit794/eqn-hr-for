@@ -1,8 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { UpgradeModal } from "@/components/UpgradeModal";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { NexaHrAppProvider } from "@/context/NexaHrAppContext";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import FaceAttendancePage from "@/pages/FaceAttendancePage";
 import DashboardLayout from "@/layouts/DashboardLayout";
@@ -13,6 +16,7 @@ import HRPanelPage from "@/pages/HRPanelPage";
 import EmployeePanelPage from "@/pages/EmployeePanelPage";
 import EmployeeJobsPage from "@/pages/EmployeeJobsPage";
 import PricingPage from "@/pages/PricingPage";
+import FeaturesPage from "@/pages/Features";
 import HiringPlanningPage from "@/pages/HiringPlanningPage";
 import RecruitmentPage from "@/pages/RecruitmentPage";
 import OnboardingPage from "@/pages/OnboardingPage";
@@ -37,6 +41,7 @@ import ResumeATS from "./pages/ai/ResumeATS";
 import CandidateRanking from "./pages/ai/CandidateRanking";
 import JDGenerator from "./pages/ai/JDGenerator";
 import InterviewScheduling from "./pages/ai/InterviewScheduling";
+import AIInterviewPlatform from "./pages/ai/AIInterviewPlatform";
 import Onboarding from "./pages/ai/Onboarding";
 import OCRVerification from "./pages/ai/OCRVerification";
 import LeavePrediction from "./pages/ai/LeavePrediction";
@@ -54,122 +59,129 @@ import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import OAuthSuccess from "@/pages/OAuthSuccess";
-import { getDefaultRoute } from "@/lib/auth";
+import { getDefaultRoute, getStoredToken } from "@/lib/auth";
+import SignupPage from "@/pages/SignupPage";
+import VerifyOtpPage from "@/pages/VerifyOtpPage";
+import AdminWelcomePage from "@/pages/AdminWelcomePage";
+import RoleConfirmationPage from "@/pages/RoleConfirmationPage";
+import SessionExpiredPage from "@/pages/SessionExpiredPage";
 
 const queryClient = new QueryClient();
 
 const HomeRedirect = () => {
-  const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role") || "employee";
+  const token = getStoredToken();
+  const role = localStorage.getItem("role") || sessionStorage.getItem("role") || "employee";
   return <Navigate to={token ? getDefaultRoute(role as any) : "/login"} replace />;
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <NotificationsProvider>
-        <Toaster />
-        <Sonner />
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <TooltipProvider>
+        <NotificationsProvider>
+          <NexaHrAppProvider>
+            <Toaster />
+            <Sonner />
 
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        {/* 🔥 GLOBAL RESPONSIVE WRAPPER */}
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <UpgradeModal />
 
-          {/* 🔥 CENTER CONTAINER */}
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/features" element={<FeaturesPage />} />
+                <Route path="/app" element={<HomeRedirect />} />
+                <Route path="/pricing" element={<PricingPage />} />
+                <Route path="/chat" element={<AIChatPage />} />
 
-            <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/verify-otp" element={<VerifyOtpPage />} />
+                <Route path="/welcome-admin" element={<AdminWelcomePage />} />
+                <Route path="/role-confirmation" element={<RoleConfirmationPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/session-expired" element={<SessionExpiredPage />} />
+                <Route path="/oauth-success" element={<OAuthSuccess />} />
 
-              {/* Default redirect */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/app" element={<HomeRedirect />} />
-              <Route path="/pricing" element={<PricingPage />} />
-
-              {/* Public Routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/oauth-success" element={<OAuthSuccess />} />
-
-              {/* Protected Routes */}
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <DashboardLayout />
-                  </ProtectedRoute>
-                }
-              >
                 <Route
-                  path="/admin"
                   element={
-                    <ProtectedRoute allowedRoles={["admin"]}>
-                      <AdminPanelPage />
+                    <ProtectedRoute>
+                      <DashboardLayout />
                     </ProtectedRoute>
                   }
-                />
-                <Route
-                  path="/hr"
-                  element={
-                    <ProtectedRoute allowedRoles={["admin", "hr"]}>
-                      <HRPanelPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/employee"
-                  element={
-                    <ProtectedRoute allowedRoles={["employee"]}>
-                      <EmployeePanelPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/hiring" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><HiringPlanningPage /></ProtectedRoute>} />
-                <Route path="/recruitment" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><RecruitmentPage /></ProtectedRoute>} />
-                <Route path="/onboarding" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><OnboardingPage /></ProtectedRoute>} />
-                <Route path="/employees" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><EmployeesPage /></ProtectedRoute>} />
-                <Route path="/attendance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AttendancePage /></ProtectedRoute>} />
-                <Route path="/payroll" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><PayrollPage /></ProtectedRoute>} />
-                <Route path="/performance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><PerformancePage /></ProtectedRoute>} />
-                <Route path="/training" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><TrainingPage /></ProtectedRoute>} />
-                <Route path="/engagement" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><EngagementPage /></ProtectedRoute>} />
-                <Route path="/compliance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><CompliancePage /></ProtectedRoute>} />
-                <Route path="/documents" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><DocumentsPage /></ProtectedRoute>} />
-                <Route path="/it-access" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ITAccessPage /></ProtectedRoute>} />
-                <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AnalyticsPage /></ProtectedRoute>} />
-                <Route path="/exit" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ExitManagementPage /></ProtectedRoute>} />
-                <Route path="/culture" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><CulturePage /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/jobs-browser" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeJobsPage /></ProtectedRoute>} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/ai-chat" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AIChatPage /></ProtectedRoute>} />
-                <Route path="/ai/ats" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AIATSPage /></ProtectedRoute>} />
-                <Route path="/ai/insights" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AIInsightsPage /></ProtectedRoute>} />
-                {/* The existing AI Interview route is updated to use InterviewScheduling */}
-                <Route path="/ai/interview" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><InterviewScheduling /></ProtectedRoute>} />
-                <Route path="/ai/resume-ats" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ResumeATS /></ProtectedRoute>} />
-                <Route path="/ai/candidate-ranking" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><CandidateRanking /></ProtectedRoute>} />
-                <Route path="/ai/jd-generator" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><JDGenerator /></ProtectedRoute>} />
-                <Route path="/ai/onboarding" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Onboarding /></ProtectedRoute>} />
-                <Route path="/ai/ocr" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><OCRVerification /></ProtectedRoute>} />
-                <Route path="/ai/leave" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><LeavePrediction /></ProtectedRoute>} />
-                <Route path="/ai/salary" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><SalaryCalculator /></ProtectedRoute>} />
-                <Route path="/ai/support" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><SupportChatbot /></ProtectedRoute>} />
-                <Route path="/ai/mental-health" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><MentalHealth /></ProtectedRoute>} />
-                <Route path="/ai/attrition" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Attrition /></ProtectedRoute>} />
-                <Route path="/ai/skill-gap" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><SkillGap /></ProtectedRoute>} />
-                <Route path="/ai/compliance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Compliance /></ProtectedRoute>} />
-                <Route path="/ai/exit" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ExitInterview /></ProtectedRoute>} />
-                <Route path="/face-attendance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><FaceAttendancePage /></ProtectedRoute>} />
-              </Route>
+                >
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute allowedRoles={["admin"]}>
+                        <AdminPanelPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/hr"
+                    element={
+                      <ProtectedRoute allowedRoles={["admin", "hr"]}>
+                        <HRPanelPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employee"
+                    element={
+                      <ProtectedRoute allowedRoles={["employee"]}>
+                        <EmployeePanelPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/hiring" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><HiringPlanningPage /></ProtectedRoute>} />
+                  <Route path="/recruitment" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><RecruitmentPage /></ProtectedRoute>} />
+                  <Route path="/onboarding" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><OnboardingPage /></ProtectedRoute>} />
+                  <Route path="/employees" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><EmployeesPage /></ProtectedRoute>} />
+                  <Route path="/attendance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AttendancePage /></ProtectedRoute>} />
+                  <Route path="/payroll" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><PayrollPage /></ProtectedRoute>} />
+                  <Route path="/performance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><PerformancePage /></ProtectedRoute>} />
+                  <Route path="/training" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><TrainingPage /></ProtectedRoute>} />
+                  <Route path="/engagement" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><EngagementPage /></ProtectedRoute>} />
+                  <Route path="/compliance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><CompliancePage /></ProtectedRoute>} />
+                  <Route path="/documents" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><DocumentsPage /></ProtectedRoute>} />
+                  <Route path="/it-access" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ITAccessPage /></ProtectedRoute>} />
+                  <Route path="/analytics" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AnalyticsPage /></ProtectedRoute>} />
+                  <Route path="/exit" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ExitManagementPage /></ProtectedRoute>} />
+                  <Route path="/culture" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><CulturePage /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/jobs-browser" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeJobsPage /></ProtectedRoute>} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/notifications" element={<NotificationsPage />} />
+                  <Route path="/ai-chat" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Navigate to="/chat" replace /></ProtectedRoute>} />
+                  <Route path="/ai/ats" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AIATSPage /></ProtectedRoute>} />
+                  <Route path="/ai/insights" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AIInsightsPage /></ProtectedRoute>} />
+                  <Route path="/ai/interview" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><InterviewScheduling /></ProtectedRoute>} />
+                  <Route path="/ai/interview-platform" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><AIInterviewPlatform /></ProtectedRoute>} />
+                  <Route path="/ai/resume-ats" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ResumeATS /></ProtectedRoute>} />
+                  <Route path="/ai/candidate-ranking" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><CandidateRanking /></ProtectedRoute>} />
+                  <Route path="/ai/jd-generator" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><JDGenerator /></ProtectedRoute>} />
+                  <Route path="/ai/onboarding" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Onboarding /></ProtectedRoute>} />
+                  <Route path="/ai/ocr" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><OCRVerification /></ProtectedRoute>} />
+                  <Route path="/ai/leave" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><LeavePrediction /></ProtectedRoute>} />
+                  <Route path="/ai/salary" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><SalaryCalculator /></ProtectedRoute>} />
+                  <Route path="/ai/support" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><SupportChatbot /></ProtectedRoute>} />
+                  <Route path="/ai/mental-health" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><MentalHealth /></ProtectedRoute>} />
+                  <Route path="/ai/attrition" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Attrition /></ProtectedRoute>} />
+                  <Route path="/ai/skill-gap" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><SkillGap /></ProtectedRoute>} />
+                  <Route path="/ai/compliance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><Compliance /></ProtectedRoute>} />
+                  <Route path="/ai/exit" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><ExitInterview /></ProtectedRoute>} />
+                  <Route path="/face-attendance" element={<ProtectedRoute allowedRoles={["admin", "hr"]}><FaceAttendancePage /></ProtectedRoute>} />
+                </Route>
 
-              <Route path="*" element={<NotFound />} />
-
-            </Routes>
-
-        </BrowserRouter>
-
-      </NotificationsProvider>
-    </TooltipProvider>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </NexaHrAppProvider>
+        </NotificationsProvider>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

@@ -54,13 +54,13 @@ export default function DashboardLayout() {
         )}
 
         {/* ✅ MAIN CONTENT */}
-        <div className={`flex min-h-screen w-full flex-col transition-[padding] duration-300 ${desktopSidebarOffset}`}>
+        <div className={`flex min-h-screen w-full min-w-0 flex-col transition-[padding] duration-300 ${desktopSidebarOffset}`}>
 
           {/* Top Navbar */}
           <TopNav onMenuClick={() => setSidebarOpen(true)} />
 
           {/* Page Content */}
-          <main className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-5 sm:py-5 md:px-6 lg:px-8">
+          <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-5 sm:py-5 md:px-6 lg:px-8">
             <Outlet />
           </main>
 

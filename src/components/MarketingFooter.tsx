@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 
 const footerLinks = [
   { label: "Home", href: "/" },
+  { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
   { label: "Login", href: "/login" },
+  { label: "Get Started", href: "/signup" },
 ];
 
 const socials = [
@@ -20,7 +22,7 @@ export function MarketingFooter() {
         <div className="space-y-2">
           <p className="text-sm font-semibold tracking-[0.22em] text-primary/80">NEXAHR</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            AI-first recruitment infrastructure for modern hiring teams that want speed, control, and premium candidate experience.
+            Modern HR and payroll software for teams that want clean workflows, strong visibility, and reliable automation.
           </p>
         </div>
 

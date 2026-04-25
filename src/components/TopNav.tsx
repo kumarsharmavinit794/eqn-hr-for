@@ -1,23 +1,53 @@
 import {
-  Bell, CheckCheck, ChevronRight, Search, Moon, Sun, MoreVertical, X, Settings, UserCircle,
-  LayoutDashboard, Briefcase, UserSearch, UserPlus, Users, Clock,
-  DollarSign, BarChart3, GraduationCap, Heart, Shield, FileText,
-  Monitor, PieChart, UserMinus, Globe, MessageSquare, Video, Brain, Sparkles
+  Bell,
+  BarChart3,
+  Brain,
+  Briefcase,
+  CheckCheck,
+  ChevronRight,
+  Clock,
+  DollarSign,
+  FileText,
+  Globe,
+  GraduationCap,
+  Heart,
+  LayoutDashboard,
+  LogOut,
+  MessageSquare,
+  Monitor,
+  Moon,
+  MoreVertical,
+  PieChart,
+  Search,
+  Settings,
+  Shield,
+  Sparkles,
+  Sun,
+  UserCircle,
+  UserMinus,
+  UserPlus,
+  UserSearch,
+  Users,
+  Video,
+  X,
 } from "lucide-react";
-
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getDefaultRoute, getStoredRole } from "@/lib/auth";
 
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useNotifications } from "@/context/NotificationsContext";
+import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-/* ================= MENU DATA ================= */
+import { Input } from "@/components/ui/input";
+import { CompanyAvatar, RoleBadge } from "@/components/workspace/WorkspacePrimitives";
+import { useNotifications } from "@/context/NotificationsContext";
+import { getDefaultRoute, getStoredAuthValue, getStoredRole } from "@/lib/auth";
+import { getActiveWorkspace, getWorkspaceUpdateEventName, logoutWorkspaceSession } from "@/lib/workspace";
 
 const modules = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
@@ -43,12 +73,10 @@ const hrModules = [
 
 const aiFeatures = [
   { label: "AI Chat", icon: MessageSquare, path: "/ai-chat" },
-  { label: "AI Interview", icon: Video, path: "/ai/interview" },
+  { label: "Interview Lab", icon: Video, path: "/ai/interview-platform" },
   { label: "Resume ATS", icon: Brain, path: "/ai/ats" },
   { label: "AI Insights", icon: Sparkles, path: "/ai/insights" },
 ];
-
-/* ================= COMPONENT ================= */
 
 interface TopNavProps {
   onMenuClick?: () => void;
@@ -57,49 +85,57 @@ interface TopNavProps {
 export function TopNav({ onMenuClick }: TopNavProps) {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeWorkspace, setActiveWorkspace] = useState(() => getActiveWorkspace());
   const navigate = useNavigate();
   const { recentNotifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
-  const storedName = localStorage.getItem("name")?.trim();
-  const storedEmail = localStorage.getItem("email")?.trim();
+  const storedName = getStoredAuthValue("name")?.trim();
+  const storedEmail = getStoredAuthValue("email")?.trim();
   const role = getStoredRole();
-  const mobileModules = role === "employee"
-    ? [{ label: "Dashboard", icon: LayoutDashboard, path: getDefaultRoute(role) }, { label: "Profile", icon: UserCircle, path: "/profile" }, { label: "Jobs", icon: Briefcase, path: "/jobs-browser" }]
-    : modules;
+  const mobileModules =
+    role === "employee"
+      ? [
+          { label: "Dashboard", icon: LayoutDashboard, path: getDefaultRoute(role) },
+          { label: "Profile", icon: UserCircle, path: "/profile" },
+          { label: "Jobs", icon: Briefcase, path: "/jobs-browser" },
+        ]
+      : modules;
   const mobileHrModules = role === "employee" ? [] : hrModules;
   const mobileAiFeatures = role === "employee" ? [] : aiFeatures;
 
   const fallbackName = storedEmail
-    ? storedEmail.split("@")[0]
-      .split(/[._-]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ")
+    ? storedEmail
+        .split("@")[0]
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
     : "User";
 
-  const displayName = storedName || fallbackName;
-  const avatarInitials = displayName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "U";
+  const displayName = storedName || activeWorkspace?.userName || fallbackName;
+  const avatarInitials =
+    displayName
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "U";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
+  useEffect(() => {
+    const eventName = getWorkspaceUpdateEventName();
+    const syncWorkspace = () => setActiveWorkspace(getActiveWorkspace());
+    window.addEventListener(eventName, syncWorkspace);
+    return () => window.removeEventListener(eventName, syncWorkspace);
+  }, []);
+
   return (
     <>
-      {/* HEADER */}
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/75 px-3 backdrop-blur-xl sm:px-4 md:px-6">
-
-        {/* LEFT */}
         <div className="flex items-center gap-3">
-
-          {/* MOBILE MENU BUTTON */}
           <Button
-            variant="ghost"
-            size="icon"
             className="h-10 w-10 rounded-full lg:hidden"
             onClick={() => {
               if (onMenuClick) {
@@ -109,35 +145,42 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 
               setMenuOpen(true);
             }}
+            size="icon"
+            variant="ghost"
           >
             <MoreVertical className="h-5 w-5" />
           </Button>
 
-          {/* SEARCH */}
-          <div className="relative hidden min-[480px]:block w-40 sm:w-56 md:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search..." className="pl-9 bg-secondary/50 border-0" />
+          <div className="relative hidden w-40 min-[480px]:block sm:w-56 md:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input className="border-0 bg-secondary/50 pl-9" placeholder="Search..." />
           </div>
+
+          {activeWorkspace ? (
+            <div className="hidden items-center gap-3 rounded-full border border-border/70 bg-background/70 px-2.5 py-1.5 shadow-sm md:flex">
+              <CompanyAvatar size="sm" workspace={activeWorkspace} />
+              <div className="min-w-0">
+                <p className="max-w-[160px] truncate text-xs font-semibold text-foreground">{activeWorkspace.companyName}</p>
+                <p className="max-w-[160px] truncate text-[11px] text-muted-foreground">{activeWorkspace.industry}</p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {/* RIGHT */}
         <div className="flex items-center gap-2">
-
-          {/* DARK MODE */}
-          <Button variant="ghost" size="icon" onClick={() => setDark(!dark)}>
-            {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          <Button onClick={() => setDark(!dark)} size="icon" variant="ghost">
+            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
-          {/* NOTIFICATION */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
+              <Button className="relative" size="icon" variant="ghost">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 ? (
                   <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
                     {unreadCount}
                   </span>
-                )}
+                ) : null}
               </Button>
             </DropdownMenuTrigger>
 
@@ -147,7 +190,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                   <p className="text-sm font-semibold">Notifications</p>
                   <p className="text-xs text-muted-foreground">{unreadCount} unread updates</p>
                 </div>
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={markAllAsRead}>
+                <Button className="h-8 px-2 text-xs" onClick={markAllAsRead} size="sm" variant="ghost">
                   <CheckCheck className="mr-1 h-4 w-4" />
                   Mark all
                 </Button>
@@ -156,12 +199,12 @@ export function TopNav({ onMenuClick }: TopNavProps) {
               <div className="max-h-[320px] overflow-y-auto p-2">
                 {recentNotifications.map((notification) => (
                   <button
-                    key={notification.id}
-                    type="button"
-                    onClick={() => markAsRead(notification.id)}
                     className={`flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
                       notification.read ? "hover:bg-muted/50" : "bg-primary/8 hover:bg-primary/12"
                     }`}
+                    key={notification.id}
+                    onClick={() => markAsRead(notification.id)}
+                    type="button"
                   >
                     <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${notification.read ? "bg-muted" : "bg-primary"}`} />
                     <span className="min-w-0 flex-1">
@@ -171,147 +214,162 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                           {notification.time}
                         </span>
                       </span>
-                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                        {notification.description}
-                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{notification.description}</span>
                     </span>
                   </button>
                 ))}
               </div>
 
               <DropdownMenuSeparator className="my-0" />
-              <DropdownMenuItem onClick={() => navigate("/notifications")} className="justify-between px-4 py-3">
+              <DropdownMenuItem className="justify-between px-4 py-3" onClick={() => navigate("/notifications")}>
                 View all notifications
                 <ChevronRight className="h-4 w-4" />
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* PROFILE */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-10 gap-2 rounded-full px-2">
+              <Button className="h-10 gap-2 rounded-full px-2" variant="ghost">
                 <Avatar className="h-7 w-7">
                   <AvatarFallback>{avatarInitials}</AvatarFallback>
                 </Avatar>
-                <span className="hidden max-w-[120px] truncate sm:inline text-sm">{displayName}</span>
+                <span className="hidden max-w-[120px] truncate text-sm sm:inline">{displayName}</span>
               </Button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate("/profile")} className="gap-2">
+              {activeWorkspace ? (
+                <>
+                  <div className="px-3 py-2">
+                    <p className="truncate text-sm font-semibold">{displayName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{storedEmail || activeWorkspace.userEmail}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <RoleBadge role={activeWorkspace.role} />
+                      <span className="truncate text-xs text-muted-foreground">{activeWorkspace.companyName}</span>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+
+              <DropdownMenuItem className="gap-2" onClick={() => navigate("/profile")}>
                 <UserCircle className="h-4 w-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2">
+              <DropdownMenuItem className="gap-2" onClick={() => navigate("/settings")}>
                 <Settings className="h-4 w-4" />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                className="text-red-500"
                 onClick={() => {
-                  localStorage.removeItem("token");
-                  localStorage.removeItem("refresh_token");
-                  localStorage.removeItem("name");
-                  localStorage.removeItem("email");
-                  localStorage.removeItem("role");
+                  logoutWorkspaceSession();
                   navigate("/login");
                 }}
-                className="text-red-500"
               >
+                <LogOut className="mr-2 h-4 w-4" />
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
         </div>
       </header>
 
-      {/* MOBILE DRAWER */}
-      {menuOpen && (
+      {menuOpen ? (
         <div className="fixed inset-0 z-50 bg-black/40 lg:hidden">
-
           <div className="absolute right-0 top-0 h-full w-[86vw] max-w-sm overflow-y-auto border-l border-border bg-card p-4 shadow-lg">
-
-            {/* HEADER */}
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-semibold">Menu</h2>
-              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setMenuOpen(false)}>
+              <Button className="h-10 w-10 rounded-full" onClick={() => setMenuOpen(false)} size="icon" variant="ghost">
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
-            {/* MENU */}
-            <div className="flex flex-col gap-6 text-sm">
+            {activeWorkspace ? (
+              <div className="mb-5 rounded-[24px] border border-border/70 bg-background/60 p-4">
+                <div className="flex items-center gap-3">
+                  <CompanyAvatar size="sm" workspace={activeWorkspace} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{activeWorkspace.companyName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{activeWorkspace.userEmail}</p>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <RoleBadge role={activeWorkspace.role} />
+                </div>
+              </div>
+            ) : null}
 
-              {/* MODULES */}
+            <div className="flex flex-col gap-6 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground mb-2">Modules</p>
+                <p className="mb-2 text-xs text-muted-foreground">Modules</p>
                 {mobileModules.map((item) => {
                   const Icon = item.icon;
                   return (
                     <button
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted"
                       key={item.path}
                       onClick={() => {
                         navigate(item.path);
                         setMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted"
                     >
-                      <Icon className="w-4 h-4" />
+                      <Icon className="h-4 w-4" />
                       {item.label}
                     </button>
                   );
                 })}
               </div>
 
-              {/* HR */}
-              {mobileHrModules.length > 0 && <div>
-                <p className="text-xs text-muted-foreground mb-2">HR Tools</p>
-                {mobileHrModules.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.path}
-                      onClick={() => {
-                        navigate(item.path);
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted"
-                    >
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>}
+              {mobileHrModules.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-xs text-muted-foreground">HR Tools</p>
+                  {mobileHrModules.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted"
+                        key={item.path}
+                        onClick={() => {
+                          navigate(item.path);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
 
-              {/* AI */}
-              {mobileAiFeatures.length > 0 && <div>
-                <p className="text-xs text-muted-foreground mb-2">AI Features</p>
-                {mobileAiFeatures.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.path}
-                      onClick={() => {
-                        navigate(item.path);
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted"
-                    >
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>}
-
+              {mobileAiFeatures.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-xs text-muted-foreground">AI Features</p>
+                  {mobileAiFeatures.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-muted"
+                        key={item.path}
+                        onClick={() => {
+                          navigate(item.path);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
-
           </div>
         </div>
-      )}
+      ) : null}
     </>
   );
 }

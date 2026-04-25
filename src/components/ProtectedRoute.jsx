@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
-import { getStoredRole } from "@/lib/auth";
+import { getStoredRole, getStoredToken } from "@/lib/auth";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const token = localStorage.getItem("token");
+  const token = getStoredToken();
   const role = getStoredRole();
 
   if (!token) {
